@@ -2,9 +2,22 @@ import numpy as np
 from inverse_kinematics import inv_kin
 from forward_kinematics import derivePoE, PoE
 from modern_robotics import TransToRp
+from constants import L1, L2, L3, L4
 
 def main():
-    test_kinematics()
+    L234 = L2 + L3 + L4
+    resolution = 10
+    coords = []
+    pitches = []
+    for x in np.linspace(-L234, L234, resolution):
+        for y in np.linspace(-L234, L234, resolution):
+            for z in np.linspace(L1-L234, L1+L234, resolution):
+                for pitch in np.linspace(-np.pi, np.pi, resolution):
+                    coords.append(np.array([x, y, z]))
+                    pitches.append(pitch)
+    coords = np.array(coords).T
+    pitches = np.array(pitches)
+    test_kinematics(coords, pitches)
 
 def test_kinematics(coords = None, pitches = None):
     Tsb, S_list = derivePoE()
@@ -15,13 +28,16 @@ def test_kinematics(coords = None, pitches = None):
         coords = np.array([coords]).T
         pitches = np.array([pitches])
     all_pass = True
+    pass_count = 0
+    fail_count = 0
     for i in range(len(coords.T)):
         coord = coords.T[i]
         pitch = pitches[i]
         possible = inv_kin(coord, pitch, check_possible=True)
         test_pass = True
         if not possible:
-            print(f'Not possible to reach!')
+            pass
+            #print(f'Not possible to reach!')
         else:
             soln = inv_kin(coord, pitch)
             T_1 = PoE(Tsb, S_list, soln[0])
@@ -38,11 +54,16 @@ def test_kinematics(coords = None, pitches = None):
                 print(f'ERROR - Orientation incorrect!')
                 test_pass = False
             if test_pass:
-                print('All checks passed!')
+                print(f'All checks passed for {coord}, {pitch*180/np.pi}!')
+                pass_count += 1
         if not test_pass:
+            print(f'Checks failed for {coord}, {pitch*180/np.pi}!')
             all_pass = False
+            fail_count += 1
     if all_pass:
-        print(f'All cases passed!')
+        print(f'All cases passed! ({pass_count}/{len(coords.T)} possible)')
+    else:
+        print(f'Some cases failed! ({pass_count}/{len(coords.T)} passed, {fail_count}/{len(coords.T)} failed)')
 
 def rot(theta, axis):
     '''

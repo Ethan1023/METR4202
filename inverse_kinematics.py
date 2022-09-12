@@ -10,14 +10,24 @@ def main():
     pitch_2 = np.array([0, 0])
     inv_kin(coords_2, pitch_2)
 
-def inv_kin(coords, pitch, printing=False, self_check = True, check_possible=False):
+def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False):
     '''
+    Inverse Kinematics!
     Yaw is dependent on x, y
     Pitch is mostly independent of x, y, z except close to end of reach
     Roll cannot be controlled
 
-    coords - array of x, y, z
-    pitch - float - pitch of end effector (0 = horizontal)
+    PARAMETERS
+    coords - 1D array of x, y, z or 2D array of xs, ys, zs
+    pitch - float or array - pitch of end effector (0 = horizontal)
+    printing - bool - whether to print working
+    self_check - bool - whether to check against analytical equations
+    check_possible - bool - return true/false if it is possible to reach coords instead of running
+    
+    RETURNS
+    2/3D array depending on input
+    soln[solutions][thetas] or soln[solutions][thetas][case]
+    always two solution even if identical
     '''
     char = ' '
     if hasattr(coords[0], '__iter__'):
@@ -25,7 +35,11 @@ def inv_kin(coords, pitch, printing=False, self_check = True, check_possible=Fal
     if printing:
         print(f'Given coords ={char}{coords}{char}and pitch ={char}{pitch*180/np.pi}')
     r = (coords[0]**2 + coords[1]**2)**0.5
-    th1 = atan2(coords[0], coords[1])
+    th1 = 0
+    if not coords[0] == 0 or not coords[1] == 0:
+        th1 = atan2(coords[0], coords[1])
+    else:
+        print('WARNING: both x and y are zero meaning theta1 is arbitrary')
     if printing:
         print(f'Changing coords, r ={char}{r},{char}theta1 ={char}{th1*180/np.pi}')
         print(f'Now joints can be represented as p = (r, z)')
@@ -35,7 +49,7 @@ def inv_kin(coords, pitch, printing=False, self_check = True, check_possible=Fal
     if printing:
         print(f'End effector, p4 ={char}{p4}')
     # From pitch, work back to p3
-    p3 = np.array([p4[0]-np.cos(pitch)*L4, p4[1]-np.sin(pitch)*L3])
+    p3 = np.array([p4[0]-np.cos(pitch)*L4, p4[1]-np.sin(pitch)*L4])
     if printing:
         print(f'From pitch, p3 ={char}{p3}')
     # From geometry
@@ -49,6 +63,8 @@ def inv_kin(coords, pitch, printing=False, self_check = True, check_possible=Fal
         if d13 > (L2 + L3):
             return False
         return True
+    if d13 > (L2 + L3):
+        print(f'ERROR - Not possible to reach position')
     if printing:
         print(f'Distance from p1 to p3 ={char}{d13}')
     # Can find theta3 through supplement of angle found from cosine rule
@@ -81,6 +97,10 @@ def inv_kin(coords, pitch, printing=False, self_check = True, check_possible=Fal
     return np.array([[th1, th2_1, th3_1, th4_1], [th1, th2_2, th3_2, th4_2]])
 
 def atan2(b, a):
+    '''
+    arctan that considers sign a and b instead of just ratio
+    a, b = sin, cos = y, x
+    '''
     # Suppress divide by zero warnings
     with np.errstate(divide='ignore'):
         theta = np.arctan(a/b)
@@ -88,6 +108,9 @@ def atan2(b, a):
     return loop(theta + np.pi*(b<0))
 
 def loop(theta):
+    '''
+    Remove excess revolutions from angle
+    '''
     return (theta + np.pi) % (2*np.pi) - np.pi
 
 if __name__ == '__main__':

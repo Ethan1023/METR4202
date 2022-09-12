@@ -1,6 +1,6 @@
 import numpy as np
 from modern_robotics import RpToTrans, VecTose3, MatrixExp6
-from constants import *
+from constants import L1, L2, L3, L4
 
 def main():
     pi = np.pi
@@ -11,6 +11,9 @@ def main():
     print(np.round(T1,3))
 
 def derivePoE():
+    '''
+    Obtain zero position end effector configuration and screws
+    '''
     R = np.eye(3)
     p = np.array([0, 0, L1+L2+L3+L4])
 
