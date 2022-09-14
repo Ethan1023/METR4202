@@ -4,13 +4,13 @@ from constants import L1, L2, L3, L4
 def main():
     coords = np.array([-2, 0, 2])
     pitch = 0*np.pi/180
-    inv_kin(coords, pitch, True)
+    print(inv_kin(coords, pitch, True))
     
     coords_2 = np.array([[3, -2], [0, 0], [1, 2]])
     pitch_2 = np.array([0, 0])
-    inv_kin(coords_2, pitch_2)
+    print(inv_kin(coords_2, pitch_2))
 
-def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False):
+def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False, return_both=False):
     '''
     Inverse Kinematics!
     Yaw is dependent on x, y
@@ -23,6 +23,7 @@ def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False
     printing - bool - whether to print working
     self_check - bool - whether to check against analytical equations
     check_possible - bool - return true/false if it is possible to reach coords instead of running
+    return_both - bool - return both possible configurations
     
     RETURNS
     2/3D array depending on input
@@ -36,7 +37,7 @@ def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False
         print(f'Given coords ={char}{coords}{char}and pitch ={char}{pitch*180/np.pi}')
     r = (coords[0]**2 + coords[1]**2)**0.5
     th1 = 0
-    if not coords[0] == 0 or not coords[1] == 0:
+    if hasattr(coords, '__iter__') or not coords[0] == 0 or not coords[1] == 0:
         th1 = atan2(coords[0], coords[1])
     else:
         print('WARNING: both x and y are zero meaning theta1 is arbitrary')
@@ -60,18 +61,18 @@ def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False
     v13 = (p3.T - p1).T
     d13 = np.sum(v13**2,axis=0)**0.5
     if check_possible:
-        if d13 > (L2 + L3):
+        if (hasattr(d13, '__iter__') and any(d13 > (L2 + L3))) or (not hasattr(d13, '__iter__') and d13 > (L2 + L3)):
             return False
         return True
-    if d13 > (L2 + L3):
+    if (hasattr(d13, '__iter__') and any(d13 > (L2 + L3))) or (not hasattr(d13, '__iter__') and d13 > (L2 + L3)):
         print(f'ERROR - Not possible to reach position')
     if printing:
         print(f'Distance from p1 to p3 ={char}{d13}')
     # Can find theta3 through supplement of angle found from cosine rule
     # See W6 slide 19 - note: our definition of angles is in opposite direction
     cth3 = (d13**2 - L2**2 - L3**2) / (2*L2*L3)
-    th3_1 = -atan2(cth3, (1-cth3**2)**0.5)
-    th3_2 = -atan2(cth3, -(1-cth3**2)**0.5)
+    th3_1 = -atan2(cth3, -(1-cth3**2)**0.5)
+    th3_2 = -atan2(cth3, (1-cth3**2)**0.5)
     if printing:
         print(f'Solutions for theta3 ={char}{th3_1*180/np.pi},{char}{th3_2*180/np.pi}')
     # Find p1, W6 slide 20
@@ -94,7 +95,10 @@ def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False
         tall = np.array([t1, t2, t3, t4, t5, t6])
         if not np.all(np.isclose(tall, 0)):
             print('ERROR - Forward kinematics self check failed!')
-    return np.array([[th1, th2_1, th3_1, th4_1], [th1, th2_2, th3_2, th4_2]])
+    solns = np.array([[th1, th2_1, th3_1, th4_1], [th1, th2_2, th3_2, th4_2]])
+    if return_both:
+        return solns
+    return solns[0]
 
 def atan2(b, a):
     '''
