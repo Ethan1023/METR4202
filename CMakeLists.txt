@@ -52,6 +52,7 @@ add_message_files(
    FILES
 	 Pos.msg
 	 Thetas.msg
+	 Gripper_OpenClose.msg
 )
 
 ## Generate services in the 'srv' folder
