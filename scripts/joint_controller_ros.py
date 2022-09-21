@@ -5,8 +5,9 @@ Use this - https://github.com/UQ-METR4202/dynamixel_interface/blob/master/tutori
 '''
 import rospy
 import numpy as np
+from modern_robotics import TransToRp
 from sensor_msgs.msg import JointState
-from inverse_kinematics import inv_kin
+from inverse_kinematics import inv_kin, atan2
 from forward_kinematics import derivePoE, PoE
 import random
 
@@ -45,7 +46,7 @@ class JointController:
         joint_state.position = desired_pos
         if desired_vel is not None:
             joint_state.velocity = desired_vel
-        self.joint_pub.publish(joint_state)
+        #self.joint_pub.publish(joint_state)
 
     def get_current_pos(self):
         if len(self.joint_names) == 0:
@@ -54,18 +55,19 @@ class JointController:
         for name in self.names:
             index = -1
             for theta, new_name in zip(self.joint_positions, self.joint_names):
-                print(name, new_name)
                 if name == new_name:
                     thetas.append(theta)
-        T1 = PoE(self.Tsb, self.screws, thetas)
-        print(T1)
+        T = PoE(self.Tsb, self.screws, thetas)
+        R, p = TransToRp(T)
+        pitch = -atan2(R[0], R[2])
+        return p, pitch
 
     def end_effector_publisher(self, desired_coords, desired_pitch, desired_vel=None):
         possible = inv_kin(desired_coords, desired_pitch, check_possible=True)
-        print(desired_coords)
+        print(f'Desired coords = {desired_coords}')
         if possible:
             thetas = inv_kin(desired_coords, desired_pitch)
-            print(f'thetas = {thetas}')
+            print(f'Desired thetas = {thetas}')
             self.joint_state_publisher(thetas, desired_vel)
 
     def go_to_pos(self, desired_coords, desired_pitch, steps=100):
