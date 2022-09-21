@@ -1,5 +1,5 @@
 import numpy as np
-from modern_robotics import RpToTrans, VecTose3, MatrixExp6, TransToRp
+from modern_robotics import RpToTrans, VecTose3, MatrixExp6, TransToRp, Adjoint
 from constants import L1, L2, L3, L4
 
 def main():
@@ -26,6 +26,36 @@ def derivePoE():
     S_list = constructscrew(ws_list, qs_list)
 
     return Tsb, S_list
+
+def derivePoE_variable(thetas, Tsb):
+    theta1 = thetas[0]
+    theta2 = thetas[1]
+    theta3 = thetas[2]
+
+    pos_list = [np.array([0, 0])]
+    pos_list.append(np.array([0, L1]))
+    pos_list.append(pos_list[-1] + np.array([np.sin(theta2)*L2, np.cos(theta2)*L2]))
+    pos_list.append(pos_list[-1] + np.array([np.sin(theta3)*L3, np.cos(theta3)*L3]))
+    qs2d_list = np.array(pos_list)
+    qs_list = np.array([qs2d_list.T[0]*np.cos(theta1), qs2d_list.T[0]*np.sin(theta1), qs2d_list.T[1]]).T
+    ws_list = np.array([[0, 0, 1], [-np.sin(theta1), np.cos(theta1), 0], [-np.sin(theta1), np.cos(theta1), 0], [-np.sin(theta1), np.cos(theta1), 0]])
+    S_list = constructscrew(ws_list, qs_list)
+
+    Ts1 = PoE(np.eye(4), [np.array([0, 0, 1, 0, 0, 0])], [theta1])
+
+    Js = np.array(S_list).T
+    print(np.round(Js,3))
+    AdTsb = Adjoint(Tsb)
+    Jb = np.matmul(np.linalg.inv(AdTsb), Js)
+    print(np.round(Jb,3))
+    AdTs1 = Adjoint(Ts1)
+    J1 = np.matmul(np.linalg.inv(AdTs1), Js)
+    print(np.round(J1,3))
+    J14DOF = np.concatenate([J1[1:4], [J1[5]]])
+    print(J14DOF)
+    J1INV = np.linalg.inv(J14DOF)
+    print(J1INV)
+    # TODO - change this to some other frame? or not
 
 def constructscrew(w, q, v=None):
     '''
