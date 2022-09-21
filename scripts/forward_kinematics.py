@@ -1,5 +1,5 @@
 import numpy as np
-from modern_robotics import RpToTrans, VecTose3, MatrixExp6
+from modern_robotics import RpToTrans, VecTose3, MatrixExp6, TransToRp
 from constants import L1, L2, L3, L4
 
 def main():

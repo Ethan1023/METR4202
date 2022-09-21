@@ -19,7 +19,7 @@ def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False
 
     PARAMETERS
     coords - 1D array of x, y, z or 2D array of xs, ys, zs
-    pitch - float or array - pitch of end effector (0 = horizontal)
+    pitch - float or array - pitch of end effector (0 = horizontal) (rad)
     printing - bool - whether to print working
     self_check - bool - whether to check against analytical equations
     check_possible - bool - return true/false if it is possible to reach coords instead of running
