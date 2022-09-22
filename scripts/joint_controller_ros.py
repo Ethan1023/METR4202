@@ -8,7 +8,7 @@ import numpy as np
 from modern_robotics import TransToRp
 from sensor_msgs.msg import JointState
 from inverse_kinematics import inv_kin, atan2
-from forward_kinematics import derivePoE, PoE, derivePoE_variable
+from forward_kinematics import derivePoE, PoE, derive_inv_jac, calc_frame1_vel
 
 class JointController:
     '''
@@ -70,7 +70,7 @@ class JointController:
         # Obtain end effector configuration
         T = PoE(self.Tsb, self.screws, self.thetas)
         R, p = TransToRp(T)
-        pitch = -atan2(R[0], R[2])
+        pitch = np.pi/2 - np.sum(self.thetas[1:])
         return p, pitch
 
     def end_effector_publisher(self, desired_coords, desired_pitch, desired_vel=None):
@@ -87,21 +87,29 @@ class JointController:
 
     def calc_joint_vel(self, thetas, coords_vel, pitch_vel):
         '''
-        Use jacobian to calculate joint velocities from current joint position and end effector velocity
+        Use jacobian taken at point L1 to calculate joint velocities from current joint position and end effector velocity
+        It is taken at L1 as a this point omega x and y velocities and jacobian rows are always zero making it possible to solve for joint velocities by simply
+        removing the zero rows of the jacobian and inverting it
         '''
-        derivePoE_variable(thetas, PoE(self.Tsb, self.screws, thetas))
-        return np.zeros(len(thetas))
+        # Oh god these funtions were painful to create
+        J1inv = derive_inv_jac(thetas)  # Find inverse 4DOF Jacobian at point L1 (after first joint)
+        # Find 4DOF velocity at this point
+        L1_4DOF_vel = calc_frame1_vel(thetas, coords_vel, pitch_vel, printing=False, Tsb=self.Tsb, screws=self.screws, ignore=True)
+        # Calculate joint velocities
+        thetas_vel = np.matmul(J1inv, L1_4DOF_vel)
+        return thetas_vel
 
     def go_to_pos(self, desired_coords, desired_pitch, time=1, steps=100):
         '''
         Adjusts velocity to reach desired in target time (i.e. will speed up if obstructed)
         Will likely overshoot a bit?
         '''
+        # TODO - computational and experimental testing required
         current_coords = None
         current_pitch = None
         while current_coords is None:
             current_coords, current_pitch = self.get_current_pos()  # Updates self.thetas
-        current_coords, current_pitch = (np.array([0, 0, 0]), 0)  # TODO
+        current_coords, current_pitch = (np.array([0, 0, 0]), 0)  # TODO - remove
         rate = rospy.Rate(steps/time)
         for t, frac in zip(np.linspace(time, time/steps, steps), 1/np.linspace(steps, 1, steps)):
             # t is total remaining time
@@ -119,8 +127,8 @@ class JointController:
             rate.sleep()
             # Update current coordinates
             current_coords, current_pitch = self.get_current_pos()
-            current_coords = target_coords  # TODO
-            current_pitch = target_pitch  # TODO
+            current_coords = target_coords  # TODO - remove
+            current_pitch = target_pitch  # TODO - remove
 
 def main():
     # Create ROS node
