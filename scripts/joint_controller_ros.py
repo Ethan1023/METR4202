@@ -7,6 +7,7 @@ import rospy
 import numpy as np
 import time
 from sensor_msgs.msg import JointState
+from metr4202.msg import Pos  # Custom messages from msg/
 from inverse_kinematics import inv_kin
 from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
 
@@ -20,6 +21,7 @@ class JointController:
     def __init__(self):
         self.other_init()
         self.rospy_init()
+        print(f'JointController initialised')
    
     def rospy_init(self):
         # Create node
@@ -29,13 +31,16 @@ class JointController:
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
         # Subscribe to actual joint states
         rospy.Subscriber('joint_states', JointState, self.joint_state_callback)
+        # Subscribe to requested position
+        rospy.Subscriber('desired_pos', Pos, self.end_pos_callback)
 
         while len(self.joint_names) == 0:
             # Block operation until state vector obtained
             time.sleep(0.01)
     
     def other_init(self):
-        self.stale = True
+        self.theta_stale = True
+        self.pos_stale = True
         # Variables for storing most recent joint state
         # Note that a list in ROS is interpreted as a tuple
         self.joint_names = ()
@@ -49,6 +54,23 @@ class JointController:
         self.thetas = None
 
         self.printing = True
+        
+        self.desired_coords = None
+        self.desired_pitch = None
+
+    def run(self):
+        while not rospy.is_shutdown():
+            while self.pos_stale and not rospy.is_shutdown():
+                time.sleep(0.001)
+            if rospy.is_shutdown():
+                return 0
+            self.pos_stale = True
+            self.go_to_pos(self.desired_coords, self.desired_pitch)
+
+    def end_pos_callback(self, pos):
+        self.desired_coords = np.array([pos.x, pos.y, pos.z])
+        self.desired_pitch = pos.pitch
+        self.pos_stale = False
 
     def joint_state_callback(self, joint_state):
         '''
@@ -65,7 +87,7 @@ class JointController:
                 if name == new_name:
                     thetas.append(theta - THETA_OFFSET[i])
         self.thetas = thetas
-        self.stale = False
+        self.theta_stale = False
 
     def joint_state_publisher(self, desired_pos, desired_vel=None):
         '''
@@ -110,14 +132,14 @@ class JointController:
             print(f'ERROR - NOT POSSIBLE')
             return False
         desired_thetas = inv_kin(desired_coords, desired_pitch)  # Obtain angles
-        while self.stale and not rospy.is_shutdown():  # Wait for new values
+        while self.theta_stale and not rospy.is_shutdown():  # Wait for new values
             time.sleep(0.01)
         thetas = np.array(self.thetas)
-        self.stale = True
+        self.theta_stale = True
         print(f'Desired pos = {desired_coords}, {desired_pitch}')
         error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
         print(f'init error = {error}')
-        while error > ERROR_TOL and not rospy.is_shutdown():
+        while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
             print(f'Current thetas = {thetas}')
             print(f'Desired thetas = {desired_thetas}')
             thetas_diff = abs(desired_thetas - thetas)  # State error
@@ -129,10 +151,10 @@ class JointController:
             # Update velocity
             self.joint_state_publisher(desired_thetas, target_thetas_vel)
             # Wait for new values
-            while self.stale and not rospy.is_shutdown():
+            while self.theta_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
             thetas = np.array(self.thetas)
-            self.stale = True
+            self.theta_stale = True
             # Update error
             error = np.sqrt(np.sum((desired_thetas-thetas)**2))
             print(f'loop error = {error}')
@@ -146,7 +168,8 @@ def main():
     # Create ROS node
     jc = JointController()
     # Prevent python from exiting
-    test(jc)
+    #test(jc)
+    jc.run()
     rospy.spin()
 
 def test(jc):
