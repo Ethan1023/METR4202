@@ -11,18 +11,30 @@ def main():
     T1 = PoE(Tsb, screws, thetas)
     print(np.round(T1,3))
 
-def derivePoE():
+def derivePoE(ind=4):
     '''
     Obtain zero position end effector configuration and screws
     '''
     R = np.eye(3)
-    p = np.array([0, 0, L1+L2+L3+L4])
+    p = np.array([0, 0, 0.0])
+    if ind > 0:
+        p[2] += L1
+    if ind > 1:
+        p[2] += L2
+    if ind > 2:
+        p[2] += L3
+    if ind > 3:
+        p[2] += L4
+
 
     Tsb = RpToTrans(R, p)
     #AdTsb = Adjoint(Tsb)
     
     ws_list = np.array([[0, 0, 1], [0, 1, 0], [0, 1, 0], [0, 1, 0]])
     qs_list = np.array([[0, 0, 0], [0, 0, L1], [0, 0, L1+L2], [0, 0, L1+L2+L3]])
+
+    ws_list = ws_list[0:ind]
+    qs_list = qs_list[0:ind]
 
     S_list = constructscrew(ws_list, qs_list)
 
@@ -51,7 +63,7 @@ def derive_inv_jac(thetas, printing=True):
     pos_list.append(pos_list[-1] + np.array([np.sin(theta3)*L3, np.cos(theta3)*L3]))
     qs2d_list = np.array(pos_list)
     qs_list = np.array([qs2d_list.T[0]*np.cos(theta1), qs2d_list.T[0]*np.sin(theta1), qs2d_list.T[1]]).T
-    # Calculate scres
+    # Calculate screws
     ws_list = np.array([[0, 0, 1], [-np.sin(theta1), np.cos(theta1), 0], [-np.sin(theta1), np.cos(theta1), 0], [-np.sin(theta1), np.cos(theta1), 0]])
     S_list = constructscrew(ws_list, qs_list)
 
@@ -178,6 +190,7 @@ def PoE(M, screws, thetas):
     '''
     M = np.matrix.copy(M)  # Copy (actually not needed I think)
     for i in range(len(screws)-1, -1, -1):  # iterate from final screw to initial
+        print(i)
         S = screws[i]
         theta = thetas[i]
         V = S * theta           # Find twist
