@@ -139,6 +139,9 @@ class JointController:
         print(f'Desired pos = {desired_coords}, {desired_pitch}')
         error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
         print(f'init error = {error}')
+        # TODO - check route is safe and modify as necessary
+        # e.g. if height below wheel thing, but end destination in safe area, don't go low until clear of wheel
+        #       if current pos above wheel - modify end pos to be safe height
         while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
             print(f'Current thetas = {thetas}')
             print(f'Desired thetas = {desired_thetas}')
