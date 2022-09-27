@@ -10,7 +10,8 @@ from modern_robotics import TransToRp
 from sensor_msgs.msg import JointState
 from inverse_kinematics import inv_kin, atan2
 from forward_kinematics import derivePoE, PoE, derive_inv_jac, calc_frame1_vel
-from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL
+from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
+
 
 class JointController:
     '''
@@ -50,6 +51,7 @@ class JointController:
         self.last_time = time.time()
         
         self.max_vel = np.array(MAX_JOINT_VEL)
+        self.thetas = None
 
         self.printing = True
         self.ERROR = False
@@ -63,6 +65,13 @@ class JointController:
         self.joint_velocities = joint_state.velocity
         self.joint_efforts = joint_state.effort
         self.last_time = time.time()
+        # Rearrange thetas in order from 1 to 4
+        thetas = []
+        for i, name in enumerate(self.names):
+            for theta, new_name in zip(self.joint_positions, self.joint_names):
+                if name == new_name:
+                    thetas.append(theta - THETA_OFFSET[i])
+        self.thetas = thetas
         self.stale = False
 
     def joint_state_publisher(self, desired_pos, desired_vel=None):
@@ -74,7 +83,7 @@ class JointController:
             assert 1 == 0
         joint_state = JointState()
         joint_state.name = self.names
-        joint_state.position = desired_pos
+        joint_state.position = desired_pos + np.array(THETA_OFFSET)
         print(f'desired_pos = {joint_state.position}')
         # Limit joint angles
         for i in range(len(desired_pos)):
@@ -103,14 +112,8 @@ class JointController:
         Get current end effector position and pitch
         '''
         # If joint state has not been published yet, return none
-        if len(self.joint_names) == 0:
+        if self.thetas is None:
             return None, None
-        # Rearrange thetas in order from 1 to 4
-        self.thetas = []
-        for name in self.names:
-            for theta, new_name in zip(self.joint_positions, self.joint_names):
-                if name == new_name:
-                    self.thetas.append(theta)
         # Obtain end effector configuration
         T = PoE(self.Tsb, self.screws, self.thetas)
         R, p = TransToRp(T)
@@ -187,7 +190,7 @@ class JointController:
 
     def go_to_pos2(self, desired_coords, desired_pitch, coords_vel = 0.05, pitch_gain = 1):
         '''
-        Runs at constant velocity
+        Runs at constant velocity - use jacobian to update velocity to move in straight line
         '''
         # TODO - computational and experimental testing required
         current_coords = None
@@ -211,7 +214,11 @@ class JointController:
             target_pitch_vel = (desired_pitch - current_pitch) * pitch_gain
             # calculate required joint velocities
             print(f'Target_vel = {target_coords_vel}, {target_pitch_vel}')
-            target_joint_vel = self.calc_joint_vel(self.thetas, target_coords_vel, target_pitch_vel)
+            target_joint_vel = np.abs(self.calc_joint_vel(self.thetas, target_coords_vel, target_pitch_vel))
+            print(f'Target joint vel = {target_joint_vel}')
+            target_joint_vel_mag = np.sqrt(np.sum(target_joint_vel**2))
+            if target_joint_vel_mag < 1:
+                target_joint_vel = target_joint_vel / target_joint_vel_mag
             print(f'Target joint vel = {target_joint_vel}')
             #target_joint_vel = np.array([0, 0, 0, 0])
             #target_joint_vel = self.calc_joint_vel(inv_kin(current_coords, current_pitch), target_coords_vel, target_pitch_vel)
@@ -231,6 +238,63 @@ class JointController:
             print()
             print()
 
+    def go_to_pos3(self, desired_coords, desired_pitch, gain=None, offset=None):
+        '''
+        Use gain to set vel?
+        '''
+        if gain is None:
+            gain = np.array(CONTROLLER_GAIN)
+        if offset is None:
+            offset = np.array(CONTROLLER_OFFSET)
+        possible = inv_kin(desired_coords, desired_pitch, check_possible=True)
+        if not possible:
+            print(f'ERROR - NOT POSSIBLE')
+            return False
+        desired_thetas = inv_kin(desired_coords, desired_pitch)
+        while self.stale and not rospy.is_shutdown():
+            time.sleep(0.01)
+        thetas = np.array(self.thetas)
+        self.stale = True
+        print(f'Desired pos = {desired_coords}, {desired_pitch}')
+        error = np.sqrt(np.sum((desired_thetas-thetas)**2))
+        print(f'init error = {error}')
+        while error > ERROR_TOL and not rospy.is_shutdown():
+            print(f'Current thetas = {thetas}')
+            print(f'Desired thetas = {desired_thetas}')
+            thetas_diff = abs(desired_thetas - thetas)
+            #coords_diff_mag = (np.sum(coords_diff**2))**0.5
+            print(f'Theta error = {thetas_diff}')
+            #print(f'Coords mag = {coords_diff_mag}')
+            #print(f'Coords norm = {coords_diff / coords_diff_mag}')
+            target_thetas_vel = thetas_diff * gain + offset
+            target_thetas_mag = np.sqrt(np.sum(target_thetas_vel**2))
+            target_thetas_vel = target_thetas_vel/target_thetas_mag**0.5
+            #target_thetas_vel[0] += CONTROLLER_OFFSET_T1
+            # calculate required joint velocities
+            print(f'Target joint vel = {target_thetas_vel}')
+            #target_joint_vel_mag = np.sqrt(np.sum(target_joint_vel**2))
+            #if target_joint_vel_mag < 1:
+            #    target_joint_vel = target_joint_vel / target_joint_vel_mag
+            #print(f'Target joint vel = {target_joint_vel}')
+            #target_joint_vel = np.array([0, 0, 0, 0])
+            #target_joint_vel = self.calc_joint_vel(inv_kin(current_coords, current_pitch), target_coords_vel, target_pitch_vel)
+            #print(inv_kin(current_coords, current_pitch))
+            # move to next position
+            self.joint_state_publisher(desired_thetas, target_thetas_vel)
+            # Wait for new values
+            while self.stale and not rospy.is_shutdown():
+                time.sleep(0.001)
+            thetas = np.array(self.thetas)
+            self.stale = True
+            # Update current coordinates
+            error = np.sqrt(np.sum((desired_thetas-thetas)**2))
+            print(f'loop error = {error}')
+            print()
+            print()
+        return True
+
+    
+
 def main():
     # Create ROS node
     jc = JointController()
@@ -240,9 +304,18 @@ def main():
 
 def test2(jc):
     while not rospy.is_shutdown():
-        jc.go_to_pos2(np.array([0.13, 0.05, 0.15]), -np.pi/2, 0.1, 2)
+        #jc.go_to_pos2(np.array([0.13, 0*0.05, 0.15]), -np.pi/2, 0.1, 2)
+        #jc.go_to_pos3(np.array([0.13, 0*0.05, 0.15]), -np.pi/2)
+        height = CARRY_HEIGHT
+        width = 0.2
+        jc.go_to_pos3(np.array([0.1, 0.5*width, height]), -np.pi/2)
         time.sleep(1)
-        jc.go_to_pos2(np.array([0.13, -0.05, 0.03]), -np.pi/2, 0.1, 2)
+        jc.go_to_pos3(np.array([0.1, -0.5*width, height]), -np.pi/2)
+        time.sleep(1)
+        #jc.go_to_pos2(np.array([0.13, 0*-0.05, 0.03]), -np.pi/2, 0.1, 2)
+        jc.go_to_pos3(np.array([0.17, -0.5*width, height]), -np.pi/2)
+        time.sleep(1)
+        jc.go_to_pos3(np.array([0.17, 0.5*width, height]), -np.pi/2)
         time.sleep(1)
 
 def test(jc):
