@@ -4,14 +4,17 @@ L2 = 0.2165-L1
 L3 = 0.0945
 L4 = 0.083
 
-MAX_JOINT_VEL = (5, 3, 5, 10)
+MAX_JOINT_VEL = (2, 3, 5, 10)
 
-ERROR_TOL = 0.01
+ERROR_TOL = 0.1
 
-THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 1.5708), (-1.9, 1.9), (-1.9, 1.9))
-#THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 0.86), (-1.9, 1.82), (-1.9, 1.9))  # Temporary
+THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
+THETA_OFFSET = (0, -0.15, 0, 0.08)
 
-THETA_PS = (2.5, 2.5, 3, 5)
-THETA_DS = (2, 2, 2, 2)
+#THETA_PS = (2.5, 2.5, 3, 5)
+#THETA_DS = (2, 2, 2, 2)
 
-MIN_VEL = 0.5
+#MIN_VEL = 0.5
+
+CONTROLLER_GAIN = 10
+CONTROLLER_OFFSET_T1 = 0
