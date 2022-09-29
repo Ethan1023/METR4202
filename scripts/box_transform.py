@@ -100,6 +100,7 @@ class BoxTransform:
 
     def run(self):
         '''Runs the box_detection node.'''
+        print('box_transform ready')
         self.subscribe()
 
     @staticmethod
