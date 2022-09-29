@@ -6,9 +6,9 @@ import rospy
 
 from scipy.spatial.transform import Rotation
 
-from METR4202.msg import BoxTransform, BoxTransformArray
-from fiducial_msgs import FiducialTransform, FiducialTransformArray
-from geometry_msgs import Transform, Vector3, Quaternion
+from metr4202.msg import BoxTransform, BoxTransformArray
+from fiducial_msgs.msg import FiducialTransform, FiducialTransformArray
+from geometry_msgs.msg import Transform, Vector3, Quaternion
 
 from constants import T_CAMERA_TO_FIXED
 
@@ -76,4 +76,4 @@ class BoxDetector:
 
 
 if __name__ == '__main__':
-    BoxDetector.run()
+    BoxDetector().run()
