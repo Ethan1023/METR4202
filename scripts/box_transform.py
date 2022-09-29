@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 
+'''
+This script subscribes to the "fiducial_transforms" topic of the ArUco tag
+detection library and publishes to the "box_transforms" topic.
+
+It is run by calling:
+$ rosrun metr4202 box_transform.py
+
+The "fiducial_transforms" topic publishes "FiducialTransformArray" objects, which
+are an array of transformations representing visible ArUco tag positions in the
+camera frame.
+
+The script converts these transformations into the fixed frame using the
+transformation matrix "T_CAMERA_TO_FIXED" defined in "constants.py".
+
+The transformed positions are published as a "BoxTransformArray" message to the
+"box_transforms" topic in a largely analogous format to "fiducial_transforms".
+'''
+
 import modern_robotics as mr
 import numpy as np
 import rospy
@@ -13,7 +31,7 @@ from geometry_msgs.msg import Transform, Vector3, Quaternion
 from constants import T_CAMERA_TO_FIXED
 
 
-class BoxDetector:
+class BoxTransform:
     def __init__(self, publisher_queue: int = 10) -> None:
         rospy.init_node('box_detection', anonymous=False)
         self.publisher_queue = publisher_queue
@@ -76,4 +94,4 @@ class BoxDetector:
 
 
 if __name__ == '__main__':
-    BoxDetector().run()
+    BoxTransform().run()
