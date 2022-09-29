@@ -54,6 +54,9 @@ class BoxTransform:
             into an array of BoxTransform objects (fixed frame) and
             publishes it.
             '''
+            print(fiducial_transforms)
+            return
+
             box_transforms = []
     
             for fiducial_transform in fiducial_transforms.transforms:
