@@ -6,8 +6,8 @@ import rospy
 
 from scipy.spatial.transform import Rotation
 
-from msg import BoxTransform
-from fiducial_msgs import FiducialTransform
+from METR4202.msg import BoxTransform, BoxTransformArray
+from fiducial_msgs import FiducialTransform, FiducialTransformArray
 from geometry_msgs import Transform, Vector3, Quaternion
 
 from constants import T_CAMERA_TO_FIXED
@@ -17,37 +17,44 @@ class BoxDetector:
     def __init__(self, publisher_queue: int = 10) -> None:
         rospy.init_node('box_detection', anonymous=False)
         self.publisher_queue = publisher_queue
-        self.publisher = rospy.Publisher('box_transforms', Transform,
+        self.publisher = rospy.Publisher('box_transforms', BoxTransformArray,
             queue_size=publisher_queue)
 
-    def publish(self, transform: Transform) -> None:
+    def publish(self, box_transforms: BoxTransformArray) -> None:
         '''
-        Publish to the "box_transforms" topic a Transform object representing
-        a box position in the fixed frame.
+        Publish to the "box_transforms" topic a BoxTransformArray message
+        object representing box positions in the fixed frame.
         '''
-        self.publisher.publish(transform)
+        self.publisher.publish(box_transforms)
 
     def subscribe(self) -> None:
         '''Subscribes to the "fiducial_transforms" topic.'''
 
-        def callback(fiducial_transform: FiducialTransform) -> None:
+        def callback(fiducial_transforms: FiducialTransformArray) -> None:
             '''
-            Converts a FiducialTransform object (camera frame) into a
-            BoxTransform object (fixed frame) and publishes it.
+            Converts an array of FiducialTransform objects (camera frame)
+            into an array of BoxTransform objects (fixed frame) and
+            publishes it.
             '''
-            # Unpack FiducialTransform message object
-            fiducial_id = fiducial_transform.fiducial_id
-            transform = fiducial_transform.transform
+            box_transforms = []
+    
+            for fiducial_transform in fiducial_transforms.transforms:
+                # Unpack FiducialTransform message object
+                fiducial_id = fiducial_transform.fiducial_id
+                transform = fiducial_transform.transform
 
-            # Transform from camera frame to fixed frame
-            B = self.Transform_to_SE3(transform)
-            T = np.array(T_CAMERA_TO_FIXED)
-            S = self.SE3_to_Transform(T @ B)
+                # Transform from camera frame to fixed frame
+                B = self.Transform_to_SE3(transform)
+                T = np.array(T_CAMERA_TO_FIXED)
+                S = self.SE3_to_Transform(T @ B)
 
-            # Publish BoxTransform message object
-            self.publish(BoxTransform(fiducial_id=fiducial_id, transform=S))
+                box_transforms.append(BoxTransform(fiducial_id=fiducial_id,
+                    transform=S))                
+    
+            # Publish BoxTransformArray message object
+            self.publish(BoxTransformArray(transforms=box_transforms))
 
-        rospy.Subscriber('fiducial_transforms', FiducialTransform, callback)
+        rospy.Subscriber('fiducial_transforms', FiducialTransformArray, callback)
         rospy.spin()
 
     def Transform_to_SE3(transform: Transform) -> np.array:
