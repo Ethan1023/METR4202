@@ -6,10 +6,11 @@ Use this - https://github.com/UQ-METR4202/dynamixel_interface/blob/master/tutori
 import rospy
 import numpy as np
 import time
-from modern_robotics import TransToRp
 from sensor_msgs.msg import JointState
-from inverse_kinematics import inv_kin, atan2
-from forward_kinematics import derivePoE, PoE, derive_inv_jac, calc_frame1_vel
+from metr4202.msg import Pos  # Custom messages from msg/
+from inverse_kinematics import inv_kin
+from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
+
 
 class JointController:
     '''
@@ -18,12 +19,28 @@ class JointController:
     Implement as action?
     '''
     def __init__(self):
+        self.other_init()
+        self.rospy_init()
+        print(f'JointController initialised')
+   
+    def rospy_init(self):
         # Create node
         rospy.init_node('joint_controller', anonymous=False)
         # Publish to desired joint states
-        self.joint_pub = rospy.Publisher('desired_joint_states_raw', JointState, queue_size=1)
+        #self.joint_pub = rospy.Publisher('desired_joint_states_raw', JointState, queue_size=1)
+        self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
         # Subscribe to actual joint states
         rospy.Subscriber('joint_states', JointState, self.joint_state_callback)
+        # Subscribe to requested position
+        rospy.Subscriber('desired_pos', Pos, self.end_pos_callback)
+
+        while len(self.joint_names) == 0:
+            # Block operation until state vector obtained
+            time.sleep(0.01)
+    
+    def other_init(self):
+        self.theta_stale = True
+        self.pos_stale = True
         # Variables for storing most recent joint state
         # Note that a list in ROS is interpreted as a tuple
         self.joint_names = ()
@@ -32,18 +49,28 @@ class JointController:
         self.joint_efforts = ()
         # Joint names
         self.names = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        # Constants for forwards kinematics
-        self.Tsb, self.screws = derivePoE()
-        self.last_time = time.time()
         
-        self.max_vel = 4
-
-        while len(self.joint_names) == 0:
-            # Block operation until state vector obtained
-            time.sleep(0.01)
+        self.max_vel = np.array(MAX_JOINT_VEL)
+        self.thetas = None
 
         self.printing = True
-        self.ERROR = False
+        
+        self.desired_coords = None
+        self.desired_pitch = None
+
+    def run(self):
+        while not rospy.is_shutdown():
+            while self.pos_stale and not rospy.is_shutdown():
+                time.sleep(0.001)
+            if rospy.is_shutdown():
+                return 0
+            self.pos_stale = True
+            self.go_to_pos(self.desired_coords, self.desired_pitch)
+
+    def end_pos_callback(self, pos):
+        self.desired_coords = np.array([pos.x, pos.y, pos.z])
+        self.desired_pitch = pos.pitch
+        self.pos_stale = False
 
     def joint_state_callback(self, joint_state):
         '''
@@ -53,24 +80,37 @@ class JointController:
         self.joint_positions = joint_state.position
         self.joint_velocities = joint_state.velocity
         self.joint_efforts = joint_state.effort
-        self.last_time = time.time()
+        # Rearrange thetas in order from 1 to 4
+        thetas = []
+        for i, name in enumerate(self.names):
+            for theta, new_name in zip(self.joint_positions, self.joint_names):
+                if name == new_name:
+                    thetas.append(theta - THETA_OFFSET[i])
+        self.thetas = thetas
+        self.theta_stale = False
 
     def joint_state_publisher(self, desired_pos, desired_vel=None):
         '''
         Publish desired joint angles and velocities
         '''
-        if self.ERROR:
-            print(f'Error encountered, crashing')
-            assert 1 == 0
         joint_state = JointState()
         joint_state.name = self.names
-        joint_state.position = desired_pos
-        print(f'desired_pos = {joint_state.position}')
+        joint_state.position = desired_pos + np.array(THETA_OFFSET)
+        # Limit joint angles
+        for i in range(len(desired_pos)):
+            if desired_pos[i] > THETA_RANGES[i][1]:
+                print(f'WARNING - Desired pos too high, saturating')
+                desired_pos[i] = THETA_RANGES[i][1]
+            elif desired_pos[i] < THETA_RANGES[i][0]:
+                print(f'WARNING - Desired pos too high, saturating')
+                desired_pos[i] = THETA_RANGES[i][0]
         if desired_vel is not None:
+            # Limit velocity
             des_vel = np.array(desired_vel)
             if any(np.abs(des_vel) > self.max_vel):
-                desired_vel = np.minimum(np.ones(4)*self.max_vel, np.abs(des_vel)) * des_vel / np.abs(des_vel)
+                desired_vel = np.minimum(self.max_vel, np.abs(des_vel))
                 print(f'WARNING - Saturating joint velocity from {des_vel} to {desired_vel}')
+            desired_vel = np.maximum(np.abs(desired_vel), np.ones(4)*0.02)
             joint_state.velocity = desired_vel
             if self.printing:
                 print(f'Publishing {joint_state.name}, {joint_state.position}, {joint_state.velocity}')
@@ -79,142 +119,74 @@ class JointController:
                 print(f'Publishing {joint_state.name}, {joint_state.position}')
         self.joint_pub.publish(joint_state)
 
-    def get_current_pos(self):
+    def go_to_pos(self, desired_coords, desired_pitch, gain=None, offset=None):
         '''
-        Get current end effector position and pitch
+        Use gain to set vel?
         '''
-        # If joint state has not been published yet, return none
-        if len(self.joint_names) == 0:
-            return None, None
-        # Rearrange thetas in order from 1 to 4
-        self.thetas = []
-        for name in self.names:
-            for theta, new_name in zip(self.joint_positions, self.joint_names):
-                if name == new_name:
-                    self.thetas.append(theta)
-        # Obtain end effector configuration
-        T = PoE(self.Tsb, self.screws, self.thetas)
-        R, p = TransToRp(T)
-        pitch = np.pi/2 - np.sum(self.thetas[1:])
-        return p, pitch
+        if gain is None:
+            gain = np.array(CONTROLLER_GAIN)
+        if offset is None:
+            offset = np.array(CONTROLLER_OFFSET)
+        possible = inv_kin(desired_coords, desired_pitch, check_possible=True) # Check if possible
+        if not possible:
+            print(f'ERROR - NOT POSSIBLE')
+            return False
+        desired_thetas = inv_kin(desired_coords, desired_pitch)  # Obtain angles
+        while self.theta_stale and not rospy.is_shutdown():  # Wait for new values
+            time.sleep(0.01)
+        thetas = np.array(self.thetas)
+        self.theta_stale = True
+        print(f'Desired pos = {desired_coords}, {desired_pitch}')
+        error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
+        print(f'init error = {error}')
+        # TODO - check route is safe and modify as necessary
+        # e.g. if height below wheel thing, but end destination in safe area, don't go low until clear of wheel
+        #       if current pos above wheel - modify end pos to be safe height
+        while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
+            print(f'Current thetas = {thetas}')
+            print(f'Desired thetas = {desired_thetas}')
+            thetas_diff = abs(desired_thetas - thetas)  # State error
+            print(f'Theta error = {thetas_diff}')
+            target_thetas_vel = thetas_diff * gain # P controller
+            target_thetas_mag = np.sqrt(np.sum(target_thetas_vel**2))  # Scale velocity back a little - nonlinear P
+            target_thetas_vel = target_thetas_vel/target_thetas_mag**0.5 + offset  # Offset by a min velocity
+            print(f'Target joint vel = {target_thetas_vel}')
+            # Update velocity
+            self.joint_state_publisher(desired_thetas, target_thetas_vel)
+            # Wait for new values
+            while self.theta_stale and not rospy.is_shutdown():
+                time.sleep(0.001)
+            thetas = np.array(self.thetas)
+            self.theta_stale = True
+            # Update error
+            error = np.sqrt(np.sum((desired_thetas-thetas)**2))
+            print(f'loop error = {error}')
+            print()
+            print()
+        return True
 
-    def end_effector_publisher(self, desired_coords, desired_pitch, desired_vel=None):
-        '''
-        Publish joint angles and velocities required to reach end effector configuration
-        '''
-        possible = inv_kin(desired_coords, desired_pitch, check_possible=True)
-        print(f'Desired coords = {desired_coords}')
-        if possible:
-            thetas = inv_kin(desired_coords, desired_pitch)
-            print(f'Desired thetas = {thetas}')
-            self.joint_state_publisher(thetas, desired_vel)
-        return possible
-
-    def calc_joint_vel(self, thetas, coords_vel, pitch_vel):
-        '''
-        Use jacobian taken at point L1 to calculate joint velocities from current joint position and end effector velocity
-        It is taken at L1 as a this point omega x and y velocities and jacobian rows are always zero making it possible to solve for joint velocities by simply
-        removing the zero rows of the jacobian and inverting it
-        '''
-        # Oh god these funtions were painful to create
-        J1inv = derive_inv_jac(thetas, printing=False)  # Find inverse 4DOF Jacobian at point L1 (after first joint)
-        # Find 4DOF velocity at this point
-        L1_4DOF_vel = calc_frame1_vel(thetas, coords_vel, pitch_vel, printing=False, Tsb=self.Tsb, screws=self.screws, ignore=True)
-        # Calculate joint velocities
-        thetas_vel = np.matmul(J1inv, L1_4DOF_vel)
-        return thetas_vel
-
-    def go_to_pos(self, desired_coords, desired_pitch, time=1, steps=100):
-        '''
-        Adjusts velocity to reach desired in target time (i.e. will speed up if obstructed)
-        Will likely overshoot a bit?
-        '''
-        # TODO - computational and experimental testing required
-        current_coords = None
-        current_pitch = None
-        while current_coords is None:
-            current_coords, current_pitch = self.get_current_pos()  # Updates self.thetas
-        #current_coords, current_pitch = (np.array([0, 0, 0]), 0)  # TODO - remove
-        rate = rospy.Rate(steps/time)
-        for t, frac in zip(np.linspace(time, time/steps, steps), 1/np.linspace(steps, 1, steps)):
-            print('loop')
-            print(f'Current coords = {current_coords}, {current_pitch}')
-            print(f'Current thetas = {self.thetas}')
-            # t is total remaining time
-            # frac is how far to solution we need to reach before the next loop
-            # if velocity is constant, these will be equally spaced
-            #target_coords = current_coords + frac * (desired_coords - current_coords)
-            #target_pitch = current_pitch + frac * (desired_pitch - current_pitch)
-            target_coords = desired_coords
-            target_pitch = desired_pitch
-            # will be constant if target coords were reached in time
-            target_coords_vel = (desired_coords - current_coords) / t
-            target_pitch_vel = (desired_pitch - current_pitch) / t
-            # calculate required joint velocities
-            print(f'target_vel = {target_coords_vel}, {target_pitch_vel}')
-            target_joint_vel = self.calc_joint_vel(self.thetas, target_coords_vel, target_pitch_vel)
-            #target_joint_vel = self.calc_joint_vel(inv_kin(current_coords, current_pitch), target_coords_vel, target_pitch_vel)
-            #print(inv_kin(current_coords, current_pitch))
-            print(f'Target joint vel = {target_joint_vel}')
-            # move to next position
-            self.end_effector_publisher(target_coords, target_pitch, target_joint_vel)
-            rate.sleep()
-            # Update current coordinates
-            current_coords, current_pitch = self.get_current_pos()
-            #current_coords = target_coords  # TODO - remove
-            #current_pitch = target_pitch  # TODO - remove
-            
+    
 
 def main():
     # Create ROS node
     jc = JointController()
     # Prevent python from exiting
-    test(jc)
+    #test(jc)
+    jc.run()
     rospy.spin()
 
 def test(jc):
-    print(f'names = {jc.joint_names}')
-    print(f'positions = {jc.joint_positions}')
-    print(f'velocities = {jc.joint_velocities}')
-    print(f'efforts = {jc.joint_efforts}')
-    print()
-    desired_pos = (0*np.pi/180, 0*np.pi/180, 0*np.pi/180, 0*np.pi/180)
-    HEIGHT = 0.22
-    #desired_coords = [0.1, 0, HEIGHT]
-    #desired_pitch = 0
-    DIST = 0.1
-    desired_coords = [DIST, 0, 0.1]
-    desired_pitch = -np.pi/2
-    speed = 50
-    desired_vel = (speed*np.pi/180, speed*np.pi/180, speed*np.pi/180, speed*np.pi/180)
-    #jc.joint_state_publisher(desired_pos, desired_vel)
-    jc.end_effector_publisher(desired_coords, desired_pitch, desired_vel)
-    rate = rospy.Rate(100)
-    i = 0
-    # Start at 0.13, 0, 0.15, -np.pi/2
-    jc.go_to_pos(np.array([0.13, 0, 0.01]), -np.pi/2, 2, 400)
-    exit()
     while not rospy.is_shutdown():
-        #ang = 20
-        #desired_pos = ((random.random()-0.5)*ang*np.pi/180, (random.random()-0.5)*ang*np.pi/180, (random.random()-0.5)*ang*np.pi/180, (random.random()-0.5)*ang*np.pi/180)
-        #jc.joint_state_publisher(desired_pos, desired_vel)
-        #desired_coords = [min(0.2,0.1+i/500), 0, HEIGHT]
-        #if i > 50:
-        #    desired_coords = [max(0.1,0.2-(i-50)/500), 0, HEIGHT]
-        desired_coords = [DIST, 0, max(0, 0.1-i/500)]
-        if i > 50:
-            desired_coords = [DIST, 0, min(0.1,0+(i-50)/500)]
-        jc.end_effector_publisher(desired_coords, desired_pitch, desired_vel)
-        jc.get_current_pos()
-        print(f'names = {jc.joint_names}')
-        print(f'positions = {jc.joint_positions}')
-        print(f'velocities = {jc.joint_velocities}')
-        print(f'efforts = {jc.joint_efforts}')
-        print()
-        i += 0.1
-        if i > 100:
-            i = 0
-        rate.sleep()
+        height = CARRY_HEIGHT
+        width = 0.2
+        jc.go_to_pos(np.array([0.1, 0.5*width, height]), -np.pi/2)
+        time.sleep(1)
+        jc.go_to_pos(np.array([0.1, -0.5*width, height]), -np.pi/2)
+        time.sleep(1)
+        jc.go_to_pos(np.array([0.17, -0.5*width, height]), -np.pi/2)
+        time.sleep(1)
+        jc.go_to_pos(np.array([0.17, 0.5*width, height]), -np.pi/2)
+        time.sleep(1)
 
 if __name__ == '__main__':
     main()
