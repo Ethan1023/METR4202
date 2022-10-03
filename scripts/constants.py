@@ -31,6 +31,7 @@ H_BASE = 0.05
 L_FENCE = 0.2
 W_FENCE = 0.05
 H_FENCE = 0.05
+BASE_TO_BELT = 0.19
 
 
 
