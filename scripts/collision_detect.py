@@ -11,6 +11,7 @@ from constants import H_BLOCK, H_BASE, RAD_BELT, H_FENCE, W_FENCE, L_FENCE, L_BA
 #Global variables
 p, pitch = JointController.get_current_pos()
 x_gripper, y_gripper, z_gripper = p[0], p[1], p[2]
+gripper_angle = pitch
 
 block_z = z_gripper - H_BLOCK/2 #height of bottom of the block
 
@@ -80,7 +81,8 @@ def avoids_blocks():
     
     Returns: True if no collision, False if collision
     '''
-    pass
+    #TODO: write function
+    return True
 
 def valid_gripper_pos():
     '''
@@ -98,7 +100,8 @@ def valid_gripper_pos():
         return False
 
     #Gripper angle
-    #TODO: elif ...
+    elif pitch != -np.pi/2: #TODO: condition for if the gripper can't reach the block
+        return False
 
     else:
         return True
