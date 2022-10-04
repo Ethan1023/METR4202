@@ -11,7 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
-	message_generation
+  geometry_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -50,8 +51,10 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
    FILES
-	 Pos.msg
-	 Thetas.msg
+   Pos.msg
+   Thetas.msg
+   BoxTransform.msg
+   BoxTransformArray.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -72,6 +75,7 @@ add_message_files(
 generate_messages(
    DEPENDENCIES
    std_msgs
+   geometry_msgs
 )
 
 ################################################
@@ -108,7 +112,7 @@ catkin_package(
 #  LIBRARIES metr4202
 #  CATKIN_DEPENDS roscpp rospy std_msgs
 #  DEPENDS system_lib
-	CATKIN_DEPENDS message_runtime
+  CATKIN_DEPENDS message_runtime
 )
 
 ###########
