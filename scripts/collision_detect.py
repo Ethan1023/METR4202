@@ -1,6 +1,16 @@
 import numpy as np
 from constants import H_BLOCK, H_BASE, RAD_BELT, H_FENCE, W_FENCE, L_FENCE, L_BASE, W_BASE, BASE_TO_BELT, BASE_TO_FENCE
 
+
+def modify_path(self, current_pos, desired_pos):
+    '''
+    Accepts current and desired positions
+    Returns modified desired position to avoid collisions
+    '''
+    # TODO - modify combos that are likely to result in a collision
+    return desired_pos
+
+
 class CollisionHandler:
     '''
     Detects whether the desired end effector position will result in a collision
