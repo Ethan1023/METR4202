@@ -13,7 +13,7 @@ from inverse_kinematics import inv_kin
 from forward_kinematics import derivePoE, PoE
 from modern_robotics import TransToRp
 from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
-from collision_detect import modify_path
+from collision_detect import modify_path, CollisionHandler
 
 class JointController:
     '''
@@ -63,6 +63,8 @@ class JointController:
         self.desired_pitch = None
 
         self.Tsb, self.screws = derivePoE()
+        self.ch = CollisionHandler((0, 0, 0), 0)
+        self.ERROR = False
 
     def run(self):
         while not rospy.is_shutdown():
@@ -99,11 +101,14 @@ class JointController:
                     thetas.append(theta - THETA_OFFSET[i])
         self.thetas = thetas
         self.theta_stale = False
+        # TODO - check for collision - set error state
 
     def joint_state_publisher(self, desired_pos, desired_vel=None):
         '''
         Publish desired joint angles and velocities
         '''
+        # TODO - if error state, go to safe pos
+        # TODO - once in safe pos, remove error state
         joint_state = JointState()
         joint_state.name = self.names
         joint_state.position = desired_pos + np.array(THETA_OFFSET)
@@ -173,7 +178,7 @@ class JointController:
                 print(f'WARNING - Reached temporary waypoint')
             current_pos = self.get_current_pos()
             # Get 'waypoint'
-            temp_desired_pos = modify_path(current_pos (desired_coords, desired_pitch))
+            temp_desired_pos = modify_path(current_pos, (desired_coords, desired_pitch))
             # Check waypoint is possible
             possible = inv_kin(temp_desired_pos[0], temp_desired_pos[1], check_possible=True)
             if not possible:
