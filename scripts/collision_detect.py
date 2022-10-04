@@ -43,7 +43,7 @@ class CollisionHandler:
         Returns: True if no collision, False if collision
         '''
         fence_x = 1.1*(W_FENCE + W_BASE/2) #absoluate value of collision x dim with 10% tolerance
-        fence_y = 1.1*(L_FENCE/2) #absoluate value of collision y dim with 10% tolerance
+        fence_y = 1.2*(L_FENCE/2) #absoluate value of collision y dim with 20% tolerance
         fence_z = 1.1*H_FENCE #collision z dim with 10% tolerance
     
         xy_fence = (self.x_gripper < fence_x) and (abs(self.y_gripper) < fence_y)
@@ -88,11 +88,7 @@ class CollisionHandler:
         if self.z_gripper < -(H_BASE - H_BLOCK/2):
             #gripper must never be lower than the height of a block on the ground
             return False        
-        elif self.z_gripper < H_BLOCK/2: 
-            #gripper must be higher than the height of a block on the belt except 
-            #when placing a block on the ground
-            #TODO: add in AND statement about the gripper not placing a block
-            return False
+
         #Gripper angle
         elif self.gripper_angle != -np.pi/2: #TODO: condition for if the gripper can't reach the block
             return False
