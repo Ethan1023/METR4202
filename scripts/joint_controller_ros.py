@@ -9,6 +9,8 @@ import time
 from sensor_msgs.msg import JointState
 from metr4202.msg import Pos  # Custom messages from msg/
 from inverse_kinematics import inv_kin
+from forward_kinematics import derivePoE, PoE
+from modern_robotics import TransToRp
 from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
 
 
@@ -57,6 +59,8 @@ class JointController:
         
         self.desired_coords = None
         self.desired_pitch = None
+
+        self.Tsb, self.screws = derivePoE()
 
     def run(self):
         while not rospy.is_shutdown():
@@ -119,6 +123,20 @@ class JointController:
                 print(f'Publishing {joint_state.name}, {joint_state.position}')
         self.joint_pub.publish(joint_state)
 
+    def get_current_pos(self, thetas = None):
+        '''
+        Get current end effector position and pitch
+        '''
+        if thetas is None: 
+            if self.thetas is None: # If joint state has not been published yet, return none
+                return None, None
+            thetas = self.thetas
+        # Obtain end effector configuration
+        T = PoE(self.Tsb, self.screws, self.thetas)
+        R, p = TransToRp(T)
+        pitch = np.pi/2 - np.sum(thetas[1:])
+        return p, pitch
+
     def go_to_pos(self, desired_coords, desired_pitch, gain=None, offset=None):
         '''
         Use gain to set vel?
@@ -142,17 +160,36 @@ class JointController:
         # TODO - check route is safe and modify as necessary
         # e.g. if height below wheel thing, but end destination in safe area, don't go low until clear of wheel
         #       if current pos above wheel - modify end pos to be safe height
+        error_temp = ERROR_TOL
         while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
+            if error_temp < ERROR_TOL:
+                print(f'WARNING - Reached temporary waypoint')
+            current_pos = self.get_current_pos()
+            # Get 'waypoint'
+            temp_desired_pos = self.modify_path(current_pos (desired_coords, desired_pitch))
+            # Check waypoint is possible
+            possible = inv_kin(temp_desired_pos[0], temp_desired_pos[1], check_possible=True)
+            if not possible:
+                print(f'ERROR - MODIFIED PATH NOT POSSIBLE')
+                print(current_pos)
+                print((desired_coords, desired_pitch))
+                print(temp_desired_pos)
+                return False
+            # Use temporary waypoint
+            temp_desired_thetas = inv_kin(temp_desired_pos[0], temp_desired_pos[1])
             print(f'Current thetas = {thetas}')
             print(f'Desired thetas = {desired_thetas}')
-            thetas_diff = abs(desired_thetas - thetas)  # State error
+            print(f'Waypoint thetas = {temp_desired_thetas}')
+            #thetas_diff = abs(desired_thetas - thetas)  # State error
+            thetas_diff = abs(temp_desired_thetas - thetas)  # State error
             print(f'Theta error = {thetas_diff}')
             target_thetas_vel = thetas_diff * gain # P controller
             target_thetas_mag = np.sqrt(np.sum(target_thetas_vel**2))  # Scale velocity back a little - nonlinear P
             target_thetas_vel = target_thetas_vel/target_thetas_mag**0.5 + offset  # Offset by a min velocity
             print(f'Target joint vel = {target_thetas_vel}')
             # Update velocity
-            self.joint_state_publisher(desired_thetas, target_thetas_vel)
+            #self.joint_state_publisher(desired_thetas, target_thetas_vel)
+            self.joint_state_publisher(temp_desired_thetas, target_thetas_vel)
             # Wait for new values
             while self.theta_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
@@ -160,12 +197,19 @@ class JointController:
             self.theta_stale = True
             # Update error
             error = np.sqrt(np.sum((desired_thetas-thetas)**2))
+            error_temp = np.sqrt(np.sum((temp_desired_thetas-thetas)**2))
             print(f'loop error = {error}')
             print()
             print()
         return True
 
-    
+    def modify_path(self, current_pos, desired_pos):
+        '''
+        Accepts current and desired positions
+        Returns modified desired position to avoid collisions
+        '''
+        # TODO - modify combos that are likely to result in a collision
+        return desired_pos
 
 def main():
     # Create ROS node
