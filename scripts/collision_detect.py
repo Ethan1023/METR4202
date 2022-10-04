@@ -44,7 +44,7 @@ class CollisionHandler:
         '''
         fence_x = 1.1*(W_FENCE + BASE_TO_FENCE) #absoluate value of collision x dim with 10% tolerance
         fence_y = 1.2*(L_FENCE/2) #absoluate value of collision y dim with 20% tolerance
-        fence_z = 1.1*H_FENCE #collision z dim with 10% tolerance
+        fence_z = 1.2*H_FENCE #collision z dim with 10% tolerance
     
         xy_fence = (self.x_gripper < fence_x) and (self.x_gripper > 0) and (abs(self.y_gripper) < fence_y)
 
