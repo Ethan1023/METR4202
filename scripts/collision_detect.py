@@ -8,7 +8,10 @@ def modify_path(self, current_pos, desired_pos):
     Returns modified desired position to avoid collisions
     '''
     # TODO - modify combos that are likely to result in a collision
-    return desired_pos
+    des_coords, des_pitch = desired_pos
+    if des_coords[2] < -(H_BASE - H_BLOCK/2):
+        des_coords[2] = -(H_BASE - H_BLOCK/2)
+    return (des_coords, des_pitch)
 
 
 class CollisionHandler:
