@@ -1,0 +1,14 @@
+<launch>
+
+  <!-- Start Ximea camera node -->
+  <node pkg="ximea_ros" type="ximea_demo" name="ximea_demo"/>
+
+  <!-- Start box_transform node -->
+  <node pkg="metr4202" type="box_transform.py" name="box_transform"/>
+
+  <!-- Start aruco_detect node -->
+  <include file="$(find ximea_ros)/launch/ximea_aruco.launch">
+    <arg name="serial" value="31704551"/>
+  </include>
+
+</launch>

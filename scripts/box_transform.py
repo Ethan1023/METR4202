@@ -120,9 +120,8 @@ class BoxTransform:
 if __name__ == '__main__':
     import sys
 
-    if len(sys.argv) == 1:
-        BoxTransform().run()
-    
-    elif len(sys.argv) == 2 and sys.argv[1] == '--test':
+    if sys.argv[1] == '--test':
         BoxTransform.test()
 
+    else:
+        BoxTransform().run()
