@@ -7,6 +7,7 @@ import rospy
 import numpy as np
 import time
 from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Pose
 from metr4202.msg import Pos  # Custom messages from msg/
 from inverse_kinematics import inv_kin
 from forward_kinematics import derivePoE, PoE
@@ -35,6 +36,7 @@ class JointController:
         rospy.Subscriber('joint_states', JointState, self.joint_state_callback)
         # Subscribe to requested position
         rospy.Subscriber('desired_pos', Pos, self.end_pos_callback)
+        rospy.Subscriber('desired_pose', Pose, self.end_pose_callback)
 
         while len(self.joint_names) == 0:
             # Block operation until state vector obtained
@@ -74,6 +76,11 @@ class JointController:
     def end_pos_callback(self, pos):
         self.desired_coords = np.array([pos.x, pos.y, pos.z])
         self.desired_pitch = pos.pitch
+        self.pos_stale = False
+
+    def end_pose_callback(self, pose):
+        self.desired_coords = np.array([pose.position.x, pose.position.y, pose.position.z])
+        self.desired_pitch = -np.pi/2
         self.pos_stale = False
 
     def joint_state_callback(self, joint_state):
