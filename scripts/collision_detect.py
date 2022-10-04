@@ -42,7 +42,7 @@ class CollisionHandler:
         Checks if the end effector position will result in a collision with the fence.        
         Returns: True if no collision, False if collision
         '''
-        fence_x1 = 1.1*BASE_TO_FENCE #absoluate value of min collision x dim with 10% tolerance
+        fence_x1 = 0.9*BASE_TO_FENCE #absoluate value of min collision x dim with 10% tolerance
         fence_x2 = 1.1*(W_FENCE + BASE_TO_FENCE) #absoluate value of max collision x dim with 10% tolerance
         fence_y = 1.2*(L_FENCE/2) #absoluate value of collision y dim with 20% tolerance
         fence_z = 1.2*H_FENCE #collision z dim with 10% tolerance
