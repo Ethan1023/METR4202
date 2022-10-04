@@ -75,6 +75,9 @@ class CollisionDetectTester:
             print(f'Avoiding blocks: {self.coll_hand.avoids_blocks()}')
             print(f'Valid gripper pos: {self.coll_hand.valid_gripper_pos()}')
             print(f'Avoiding all: {self.coll_hand.avoids_all_collisions()}')
+            p, pitch = self.get_current_pos()
+            print(f'Pos = {p}, Pitch = {pitch}')
+            print()
 
 def main():
     cdt = CollisionDetectTester()
