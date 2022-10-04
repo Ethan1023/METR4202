@@ -90,7 +90,7 @@ class CollisionHandler:
             return False        
 
         #Gripper angle
-        elif self.gripper_angle != -np.pi/2: #TODO: condition for if the gripper can't reach the block
+        elif abs(self.gripper_angle + np.pi/2) > 10*np.pi/180: #TODO: condition for if the gripper can't reach the block
             return False
         else:
             return True
