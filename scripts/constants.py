@@ -1,3 +1,8 @@
+'''
+Rules for state machine - figured I might put some here based on assumptions made in collision detect
+Never go directly from below belt on left side to right side or vise versa
+'''
+
 # GEOMETRY
 L1 = 0.101
 L2 = 0.2165-L1
@@ -42,4 +47,7 @@ BASE_TO_BELT = 0.19
 BASE_TO_FENCE = 0.0622
 
 
+THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
+THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
+RADIUS_FENCE = 0.14  # If larger than this radius, fence colliusions should be impossible - TODO
 
