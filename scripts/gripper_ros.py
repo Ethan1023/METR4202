@@ -14,7 +14,7 @@ class GripperController:
 
     # Define servo positions corresponding to gripper states
     position = {
-        False: 1400, # grip
+        False: 1375, # grip
         True:  2000, # open
     }
 
@@ -54,9 +54,11 @@ class GripperController:
         publisher = rospy.Publisher('gripper_state', GripperState, queue_size=0)
 
         while True:
-            open = {'open': 1, 'grip': 0}.get(input('Type "open" or "grip":'))
-            gripper_state = GripperState(); gripper_state.open = open
-            publisher.publish(gripper_state)
+            cmdstr = input('Type "open" or "grip": ')
+            if cmdstr in ('open', 'grip'):
+                open = {'open': 1, 'grip': 0}[cmdstr]
+                gripper_state = GripperState(); gripper_state.open = open
+                publisher.publish(gripper_state)
 
 
 if __name__ == '__main__':
