@@ -14,7 +14,7 @@ class GripperController:
 
     # Define servo positions corresponding to gripper states
     position = {
-        False: 1300, # grip
+        False: 1400, # grip
         True:  2000, # open
     }
 
@@ -42,7 +42,27 @@ class GripperController:
         print('gripper_controller ready')
         self.subscribe()
 
+    @staticmethod
+    def test() -> None:
+        '''
+        Creates a new node that publishes to "gripper_state" the
+        commands entered on the command line.
+        '''
+        rospy.init_node('test_gripper_controller', anonymous=False)
+        publisher = rospy.Publisher('gripper_state', GripperState, queue_size=0)
+
+        while True:
+            open = {'open': 1, 'grip': 0}[input()]
+            gripper_state = GripperState(); gripper_state.open = open
+            publisher.publish(gripper_state)
+
 
 if __name__ == '__main__':
-    GripperController().run()
+    import sys
+
+    if sys.argv[1] == '--test':
+        GripperController.test()
+
+    else:
+        GripperController().run()
 
