@@ -59,4 +59,4 @@ class BoxTracker():
 
 
 if __name__ == '__main__':
-    BoxTracker.run()
+    BoxTracker().run()
