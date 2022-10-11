@@ -4,37 +4,42 @@
 TODO: documentation
 '''
 
-import rospy
 import pigpio
-from metr4202.msg import GripperState  # Custom messages from msg/
+import rospy
 
-class Gripper:
-    def __init__(self):
-        # Initialise ROS node - anonymouse means the same node can't be run twice atst (I think)
-        rospy.init_node('gripper', anonymous=False)
-        # Subscribe to 'gripper_state' to receive desired config as GripperState message, and call self.callback with this message
-        rospy.Subscriber('gripper_state', GripperState, self.callback)
+from metr4202.msg import GripperState
+
+
+class GripperController:
+
+    # Define servo positions corresponding to gripper states
+    position = {
+        0: 1500, # open
+        1: 2000, # grip
+    }
+
+    def __init__(self) -> None:
+        rospy.init_node('gripper_controller', anonymous=False)
         self.rpi = pigpio.pi()
-        self.rpi.set_mode(18, pigpio.OUTPUT)
-        self.CLOSE = 1000
-        self.GRIP = 1500
-        self.OPEN = 2000
+        self.rpi_pin = 18
+        self.rpi.set_mode(self.rpi_pin, pigpio.OUTPUT)
 
-    def callback(self, msg):
-        # Extract position from message
-        open_gripper = msg.open_gripper
-        if open_gripper:
-            # Open gripper
-            self.rpi.set_servo_pulsewidth(18, self.OPEN)
-        else:
-            # Close gripper
-            self.rpi.set_servo_pulsewidth(18, self.GRIP)
+    def subscribe(self) -> None:
+        '''Subscribes to the "gripper_state" topic.'''
 
-def main():
-    # Create ROS node
-    gripper = Gripper()
-    # Prevent python from exiting
-    rospy.spin()
+        def callback(gripper_state: GripperState) -> None:
+            '''Sets the gripper position based on the GripperState message.'''
+            state = gripper_state.open
+            self.rpi.set_servo_pulsewidth(self.rpi_pin, self.position[state])
+
+        rospy.Subscriber('gripper_state', GripperState, self.callback)
+        rospy.spin()
+
+    def run(self) -> None:
+        '''Runs the gripper_controller node.'''
+        print('gripper_controller ready')
+        self.subscribe()
+
 
 if __name__ == '__main__':
-    main()
+    GripperController().run()
