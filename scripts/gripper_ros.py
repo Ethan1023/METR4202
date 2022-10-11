@@ -60,9 +60,10 @@ class GripperController:
 if __name__ == '__main__':
     import sys
 
-    if sys.argv[1] == '--test':
-        GripperController.test()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--test':
+            GripperController.test()
+            sys.exit(0)
 
-    else:
-        GripperController().run()
+    GripperController().run()
 
