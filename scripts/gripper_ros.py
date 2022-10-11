@@ -56,7 +56,7 @@ class GripperController:
         while True:
             cmdstr = input('Type "open" or "grip" (or "exit"): ')
 
-            if cmdstr == 'exit':
+            if cmdstr in ('exit', '^C'):
                 sys.exit(0)
 
             if cmdstr in ('open', 'grip'):
