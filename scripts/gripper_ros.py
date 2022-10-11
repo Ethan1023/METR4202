@@ -14,8 +14,8 @@ class GripperController:
 
     # Define servo positions corresponding to gripper states
     position = {
-        0: 1500, # open
-        1: 2000, # grip
+        False: 1300, # grip
+        True:  2000, # open
     }
 
     def __init__(self) -> None:
@@ -30,6 +30,8 @@ class GripperController:
         def callback(gripper_state: GripperState) -> None:
             '''Sets the gripper position based on the GripperState message.'''
             state = gripper_state.open
+            print('gripper do:', end='')
+            print('open' if state else 'grip')
             self.rpi.set_servo_pulsewidth(self.rpi_pin, self.position[state])
 
         rospy.Subscriber('gripper_state', GripperState, callback)
