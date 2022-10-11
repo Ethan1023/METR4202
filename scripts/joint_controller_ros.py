@@ -30,8 +30,9 @@ class JointController:
         # Create node
         rospy.init_node('joint_controller', anonymous=False)
         # Publish to desired joint states
-        #self.joint_pub = rospy.Publisher('desired_joint_states_raw', JointState, queue_size=1)
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
+        # Publish to position error - TODO set message type
+        self.error_pub = rospy.Publisher('position_error', None, queue_size=1)
         # Subscribe to actual joint states
         rospy.Subscriber('joint_states', JointState, self.joint_state_callback)
         # Subscribe to requested position
@@ -130,6 +131,10 @@ class JointController:
                 print(f'Publishing {joint_state.name}, {joint_state.position}')
         self.joint_pub.publish(joint_state)
 
+    def error_publisher(self, error):
+        error_msg = None # TODO - message type and population
+        self.error_pub.publish(error_msg)
+
     def get_current_pos(self, thetas = None):
         '''
         Get current end effector position and pitch
@@ -205,6 +210,8 @@ class JointController:
             # Update error
             error = np.sqrt(np.sum((desired_thetas-thetas)**2))
             error_temp = np.sqrt(np.sum((temp_desired_thetas-thetas)**2))
+            # Publsh angle errors to state machine
+            self.error_publisher(error)
             print(f'loop error = {error}')
             print()
             print()
