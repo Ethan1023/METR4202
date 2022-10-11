@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
+
+'''
+TODO: documentation
+'''
+
 import rospy
 import pigpio
-from metr4202.msg import Gripper_OpenClose  # Custom messages from msg/
+from metr4202.msg import GripperState  # Custom messages from msg/
 
 class Gripper:
     def __init__(self):
         # Initialise ROS node - anonymouse means the same node can't be run twice atst (I think)
         rospy.init_node('gripper', anonymous=False)
-        # Subscribe to 'gripper_openclose' to receive desired config as Gripper_OpenClose message, and call self.callback with this message
-        rospy.Subscriber('gripper_openclose', Gripper_OpenClose, self.callback)
+        # Subscribe to 'gripper_state' to receive desired config as GripperState message, and call self.callback with this message
+        rospy.Subscriber('gripper_state', GripperState, self.callback)
         self.rpi = pigpio.pi()
         self.rpi.set_mode(18, pigpio.OUTPUT)
         self.CLOSE = 1000
