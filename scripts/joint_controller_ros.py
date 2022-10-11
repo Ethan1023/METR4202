@@ -160,6 +160,7 @@ class JointController:
         possible = inv_kin(desired_coords, desired_pitch, check_possible=True) # Check if possible
         if not possible:
             print(f'ERROR - NOT POSSIBLE')
+            print(desired_coords, desired_pitch)
             return False
         desired_thetas = inv_kin(desired_coords, desired_pitch)  # Obtain angles
         while self.theta_stale and not rospy.is_shutdown():  # Wait for new values

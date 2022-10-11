@@ -38,12 +38,17 @@ class BoxTracker():
             Converts the first BoxTransform object in the given array message
             into a position and pitch and publishes it as a Pos message object.
             '''
-            box_transform = box_transforms.transforms[0]
+            transforms = box_transforms.transforms
+
+            if not transforms: # if there are no messages then exit
+                return
+
+            box_transform = transforms[0]
 
             T = box_transform.transform.translation # Vector3
 
             # Add constant offset to position so the camera is unobstructed
-            x = T.x + 0.05; y = T.y + 0.05; z = T.z + 0.05 # [m]
+            x = T.x - 0.05; y = T.y; z = 0.1 # [m]
 
             # Create and publish Pos message object
             pos = Pos(); pos.x = x; pos.y = y; pos.z = z; pos.pitch = -np.pi/2
