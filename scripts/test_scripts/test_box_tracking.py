@@ -38,7 +38,7 @@ class BoxTracker():
             Converts the first BoxTransform object in the given array message
             into a position and pitch and publishes it as a Pos message object.
             '''
-            box_transform = box_transforms[0]
+            box_transform = box_transforms.transform[0]
 
             T = box_transform.transform.translation # Vector3
 
