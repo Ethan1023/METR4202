@@ -56,7 +56,7 @@ class GripperController:
         while True:
             cmdstr = input('Type "open" or "grip" (or "exit"): ')
 
-            if cmdstr in ('exit', '^C'):
+            if cmdstr in ('exit'):
                 sys.exit(0)
 
             if cmdstr in ('open', 'grip'):
@@ -70,7 +70,10 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 1:
         if sys.argv[1] == '--test':
-            GripperController.test()
+            try:
+                GripperController.test()
+            except KeyboardInterrupt:
+                pass
             sys.exit(0)
 
     GripperController().run()
