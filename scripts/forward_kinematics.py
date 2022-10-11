@@ -190,7 +190,6 @@ def PoE(M, screws, thetas):
     '''
     M = np.matrix.copy(M)  # Copy (actually not needed I think)
     for i in range(len(screws)-1, -1, -1):  # iterate from final screw to initial
-        print(i)
         S = screws[i]
         theta = thetas[i]
         V = S * theta           # Find twist
