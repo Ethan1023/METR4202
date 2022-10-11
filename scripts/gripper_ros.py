@@ -48,13 +48,17 @@ class GripperController:
         Creates a new node that publishes to "gripper_state" the
         commands entered on the command line.
         '''
-        print('Test gripper_controller node by typing "open" or "grip"')
+        print('Test gripper_controller node by typing "open" or "grip". Type "exit" to finish.')
 
         rospy.init_node('test_gripper_controller', anonymous=False)
         publisher = rospy.Publisher('gripper_state', GripperState, queue_size=0)
 
         while True:
-            cmdstr = input('Type "open" or "grip": ')
+            cmdstr = input('Type "open" or "grip" (or "exit"): ')
+
+            if cmdstr == 'exit':
+                sys.exit(0)
+
             if cmdstr in ('open', 'grip'):
                 open = {'open': 1, 'grip': 0}[cmdstr]
                 gripper_state = GripperState(); gripper_state.open = open
