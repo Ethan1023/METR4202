@@ -32,7 +32,7 @@ class GripperController:
             state = gripper_state.open
             self.rpi.set_servo_pulsewidth(self.rpi_pin, self.position[state])
 
-        rospy.Subscriber('gripper_state', GripperState, self.callback)
+        rospy.Subscriber('gripper_state', GripperState, callback)
         rospy.spin()
 
     def run(self) -> None:
