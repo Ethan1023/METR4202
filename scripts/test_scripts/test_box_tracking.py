@@ -57,15 +57,15 @@ class BoxTracker():
             Converts the first BoxTransform object in the given array message
             into a position and pitch and publishes it as a Pos message object.
             '''
-            # When a transform is received, open the gripper
-            gripper_state = GripperState(); gripper_state.open = True
-            self.publish_gripper_state(gripper_state)
-
             # Extract the position of a block from the transform array
             transforms = box_transforms.transforms
 
             if not transforms: # if there are no messages then exit
                 return
+
+            # When a transform is received, open the gripper
+            gripper_state = GripperState(); gripper_state.open = True
+            self.publish_gripper_state(gripper_state)
 
             box_transform = transforms[0]
 
