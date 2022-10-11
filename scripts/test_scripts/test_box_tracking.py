@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
 
 '''
-This script currently tests the following nodes:
-
-    - "joint_controllers"
-    - "gripper_controller"
-
-It does so by subscribing to the "box_transform" topic and publishing the
-position of the first block to "desired_pos". A constant offset is added to the
-position to keep the camera unobstructed and the pitch is kept at a constant
-90 deg. The end effector should approximately track the position of a block.
-
-It also publishes open and grip states to the gripper controller. The gripper
-should open before moving and close after moving.
+This script tests the "joint_controllers" node by subscribing to the
+"box_transform" topic and publishing the position of the first block directly
+to "desired_pos". A constant offset is added to the position to keep the
+camera unobstructed and the pitch is kept at a constant 90 deg.
 
 It is run by calling:
 $ rosrun metr4202 test_box_tracking.py
@@ -28,7 +20,6 @@ class BoxTracker():
     def __init__(self, publisher_queue_size: int = 10) -> None:
         rospy.init_node('box_tracking', anonymous=False)
         self.publisher_queue_size = publisher_queue_size
-
         self.publisher = rospy.Publisher('desired_pos', Pos,
             queue_size=publisher_queue_size)
 
@@ -62,7 +53,7 @@ class BoxTracker():
 
             # Create and publish Pos message object
             pos = Pos(); pos.x = x; pos.y = y; pos.z = z; pos.pitch = -np.pi/2
-            self.publish_joint_state(pos)
+            self.publish(pos)
 
         rospy.Subscriber('box_transforms', BoxTransformArray, callback)
         rospy.spin()
