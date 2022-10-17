@@ -10,11 +10,12 @@ def block_distances(pos_list):
     returns: list of block distances
     '''
     coords_list = []
-    block_distances = []
     for pos in pos_list:
         #get 2x1 position vector from 4x4 matrix (x and y coords)
         coords = pos[:2, 3]
-        coords_list.append(coords)    
+        coords_list.append(coords) 
+
+    block_distances = []
     for coords in coords_list:
         #unpack position vector into coordinates
         x, y = pos
@@ -22,6 +23,7 @@ def block_distances(pos_list):
         block_distance = np.hypot(x,y)
         #create list of distances
         block_distances.append(block_distance)
+        
     return block_distances
 
 
