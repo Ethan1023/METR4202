@@ -1,5 +1,7 @@
 import numpy as np
-import BoxTransform
+
+def main():
+    pass
 
 def block_distances(pos_list):
     '''
@@ -10,6 +12,7 @@ def block_distances(pos_list):
     coords_list = []
     block_distances = []
     for pos in pos_list:
+        #get 2x1 position vector from 4x4 matrix (x and y coords)
         coords = pos[:3, 2]
         coords_list.append(coords)    
     for coords in coords_list:
@@ -20,3 +23,7 @@ def block_distances(pos_list):
         #create list of norms
         block_distances.append(block_distance)
     return block_distances
+
+
+if __name__ == "__main__":
+    main()
