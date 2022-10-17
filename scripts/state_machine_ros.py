@@ -2,7 +2,7 @@ import rospy
 import time
 import numpy as np
 #from sensor_msgs.msg import JointState
-from metr4202.msg import Pos  # Custom messages from msg/
+from metr4202.msg import BoxTransformArray, Pos  # Custom messages from msg/
 
 class StateMachine:
     def __init__(self):
@@ -26,7 +26,7 @@ class StateMachine:
         # Publish to desired end effector
         self.joint_pub = rospy.Publisher('desired_pos', Pos, queue_size=1)
         # Subscribe to camera - TODO
-        rospy.Subscriber(None, None, self.camera_callback)
+        rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
         # Subscribe to angle error - TODO
         rospy.Subscriber('position_error', None, self.position_error_callback)
 
