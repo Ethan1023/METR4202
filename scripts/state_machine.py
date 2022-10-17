@@ -18,9 +18,9 @@ def block_distances(pos_list):
     for coords in coords_list:
         #unpack position vector into coordinates
         x, y = pos
-        #calculate the duistance
+        #calculate the distance
         block_distance = np.hypot(x,y)
-        #create list of norms
+        #create list of distances
         block_distances.append(block_distance)
     return block_distances
 
