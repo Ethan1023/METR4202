@@ -6,7 +6,7 @@ def main():
 def block_distances(pos_list):
     '''
     Calculates the distances (norm) of each fo the blocks from the robot base.
-    args: pos (4x4 transofrmation matrix)
+    args: pos (4x4 transformation matrix)
     returns: list of block distances
     '''
     coords_list = []
