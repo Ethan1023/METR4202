@@ -13,7 +13,7 @@ def block_distances(pos_list):
     block_distances = []
     for pos in pos_list:
         #get 2x1 position vector from 4x4 matrix (x and y coords)
-        coords = pos[:3, 2]
+        coords = pos[:2, 3]
         coords_list.append(coords)    
     for coords in coords_list:
         #unpack position vector into coordinates
