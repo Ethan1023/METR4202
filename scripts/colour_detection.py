@@ -4,17 +4,42 @@
 TODO: documentation
 '''
 
+import numpy as np
 import rospy
 
-from std_msgs.msg import Bool, ColorRGBA
+from std_msgs.msg import Bool, ColorRGBA, String
 
 
 class ColourDetection:
     def __init__(self, publisher_queue: int = 10) -> None:
         rospy.init_node('colour_detection', anonymous=False)
         self.publisher_queue = publisher_queue
-        self.publisher = rospy.Publisher('box_colour', ColorRGBA,
+        self.publisher = rospy.Publisher('box_colour', String,
             queue_size=publisher_queue)
+
+    def classify_colour(self, colour: ColorRGBA) -> str:
+        '''
+        Classifies given colour as: "red", "green", "blue", "yellow" or "other".
+        '''
+        r = colour.r; g = colour.g; b = colour.b; rgb = np.array([r, g, b])
+
+        # Get the relative magnitude of each colour component
+        cnorm = np.linalg.norm(rgb); r, g, b = rgb / cnorm
+
+        # Classify the colour
+        if (r == 1 and g < 0.5 and b < 0.5):
+            return 'red'
+
+        if (r < 0.5 and g == 1 and b < 0.5):
+            return 'green'
+
+        if (r < 0.5 and g > 0.8 and b > 0.8):
+            return 'blue'
+
+        if (r > 0.8 and g > 0.8 and b < 0.5):
+            return 'yellow'
+
+        return 'other'
 
     def subscribe(self) -> None:
         '''
@@ -28,10 +53,8 @@ class ColourDetection:
             Publishes the colour in the "self.detected_colour" variable to
             the "box_colour" topic.
             '''
-            print('[*] received request')
             # Request probably won't be "false"...
-            print(type(self.detected_colour))
-            self.publisher.publish(self.detected_colour)
+            self.publisher.publish(self.classify_colour(self.detected_colour))
 
         def update_callback(colour: ColorRGBA) -> None:
             '''
@@ -57,11 +80,11 @@ class ColourDetection:
         '''
         import time
 
-        def callback(colour):
-            print(f' Received response:', (colour.r, colour.g, colour.b))
+        def callback(colour: String) -> None:
+            print(f'Detected colour:', colour)
 
         rospy.init_node('test_colour_detection', anonymous=False)
-        rospy.Subscriber('box_colour', ColorRGBA, callback)
+        rospy.Subscriber('box_colour', String, callback)
 
         publisher = rospy.Publisher('colour_request', Bool, queue_size=1)
         request = Bool(); request.data = True
