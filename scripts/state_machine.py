@@ -49,7 +49,7 @@ def bl_to_bl_dist(xs, ys):
             #calculate distance from one block to another
             d = np.hypot((x-xo), (y-yo))
             d_list.append(d)
-        #add together all the distances to teh other points
+        #add together all the distances to the other points
         total_d = sum(d_list)
         total_ds.append(total_d)
     return total_ds
@@ -64,4 +64,4 @@ def grab_pos(x, y):  #matrix in array form
 
 
 def which_state():
-    
+    pass
