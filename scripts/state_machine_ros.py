@@ -6,7 +6,9 @@ from std_msgs.msg import Bool, ColorRGBA, Float32
 #from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 from inverse_kinematics import inv_kin
-from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME
+from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
+                      STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, \
+                      L1, L2, L3, L4, PLACE_DICT
 
 class StateMachine:
     def __init__(self):
@@ -34,8 +36,11 @@ class StateMachine:
         self.start_time = time.time()   # update while blocks are not moving
         self.stop_time = time.time()    # update while blocks are moving
 
-        # TODO - variables to store current state
-            # i.e. placing block, picking up block, returning etc
+        # variables to store current state
+        self.state = STATE_RESET
+        self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
+                            self.state_colour, self.state_place, self.state_error)
+        self.desired_id = None
 
     def rospy_init(self):
         # Create node
@@ -96,6 +101,7 @@ class StateMachine:
         return self.detected_colour
 
     def position_error_callback(self, msg):
+        # TODO - track change in position error to see if robot is still moving
         self.position_error = msg.data
 
     def desired_pos_publisher(self, coords, pitch=None):
@@ -166,9 +172,76 @@ class StateMachine:
         # do logic
         # if len(self.ids) == 1:
         #     state_1(self.xs[0], self.ys[0])
-        self.pickup_block(0)
+        print(f"State = {self.state}")
+        self.state = self.state_funcs[self.state]()
+        # self.pickup_block(0)
         # publsh commands if needed
 
+    def state_reset(self):
+        # Returns robot to initial position and opens gripper
+        self.gripper_publisher()
+        coords = (L4, 0, L1+L2+L3)
+        self.desired_pos_publisher(coords, 0)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        return STATE_FIND
+
+    def state_find(self):
+        # Locating and choosing which block to pick up
+        # TODO: ADD LOGIC
+        self.desired_id = self.ids[0] # TEMPORARY, FIX THIS - TODO
+        return STATE_GRAB
+
+    def state_grab(self):
+        # Picking up a block
+        # If fails, open gripper and return to state_find
+        self.pickup_block(self.desired_id)
+        return STATE_COLOUR
+
+    def state_colour(self):
+        # Checking the block colour
+        # If fails, open gripper and return to state_find
+        coords = None # TODO - get position
+        pitch = None
+        self.desired_pos_publisher(coords, pitch)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        self.request_colour()
+        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
+
+    def state_place(self):
+        # Get destination from state_colour
+        # Checking id list until the block arrives at that destination
+        # If block appears back in the id/pos list, go to state_find
+        # Once position error is low enough, put block down then return to state_reset
+        # TODO - create dictionary of tuples within constants file for colours which returns xy
+        # TODO - get z values
+        x, y = PLACE_DICT[self.detected_colour]
+        z = None
+        coords = (x, y, z)
+        self.desired_pos_publisher(coords)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        z = None
+        coords = (x, y, z)
+        self.desired_pos_publisher(coords)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        self.gripper_publisher(True)
+        time.sleep(GRAB_TIME)
+        z = None
+        coords = (x, y, z)
+        self.desired_pos_publisher(coords)
+        return STATE_RESET
+
+    def state_error(self):
+        # If called, open gripper and go to state_reset
+        self.gripper_publisher()
+        return STATE_RESET
 
 if __name__ == '__main__':
-    StateMachine().loop()
+    # Create ROS node
+    sm = StateMachine()
+    # Prevent python from exiting
+    sm.run()
+    rospy.spin()
