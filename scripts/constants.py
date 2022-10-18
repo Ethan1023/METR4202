@@ -46,6 +46,10 @@ H_FENCE = 0.05
 BASE_TO_BELT = 0.19
 BASE_TO_FENCE = 0.0622
 
+#COORDINATES OF CENTRE OF TURNTABLE
+X_CENTRE = 0.019
+Y_CENTRE = 0
+
 
 THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
 THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
