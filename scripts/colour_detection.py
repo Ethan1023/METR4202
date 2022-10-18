@@ -24,16 +24,17 @@ class ColourDetection:
         r = colour.r; g = colour.g; b = colour.b; rgb = np.array([r, g, b])
 
         # Get the relative magnitude of each colour component
-        cnorm = np.linalg.norm(rgb); r, g, b = rgb / cnorm
-
+        cmax = max(rgb); r, g, b = rgb / cmax
+        
         # Classify the colour
+        print(f'{r = }, {g = }, {b = }')
         if (r == 1 and g < 0.5 and b < 0.5):
             return 'red'
 
         if (r < 0.5 and g == 1 and b < 0.5):
             return 'green'
 
-        if (r < 0.5 and g > 0.8 and b > 0.8):
+        if (r < 0.6 and g > 0.8 and b > 0.8):
             return 'blue'
 
         if (r > 0.8 and g > 0.8 and b < 0.5):
@@ -90,7 +91,7 @@ class ColourDetection:
         request = Bool(); request.data = True
 
         requests_sent = 0
-        while True:
+        while not rospy.is_shutdown():
             publisher.publish(request)
             print(f'[x] Sent request {requests_sent+1}')
             requests_sent += 1
