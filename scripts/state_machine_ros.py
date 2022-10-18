@@ -1,6 +1,8 @@
 import rospy
 import time
 import numpy as np
+
+from std_msgs.msg import Bool, ColorRGBA
 #from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos  # Custom messages from msg/
 
@@ -25,10 +27,14 @@ class StateMachine:
         rospy.init_node('state_machine', anonymous=False)
         # Publish to desired end effector
         self.joint_pub = rospy.Publisher('desired_pos', Pos, queue_size=1)
+        # Publish to request box colour
+        self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
         # Subscribe to camera - TODO
         rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
         # Subscribe to angle error - TODO
         rospy.Subscriber('position_error', None, self.position_error_callback)
+        # Subscribe to colour detection
+        rospy.Subscriber('box_colour', ColorRGBA, self.colour_detect_callback)
 
         while self.camera_stale and not rospy.is_shutdown():
             # Block operation until camera data received
@@ -37,6 +43,25 @@ class StateMachine:
     def camera_callback(self, msg):
         # TODO - populate class variables
         self.camera_stale = False
+
+    def colour_detect_callback(self, data: ColorRGBA) -> None:
+        '''
+        Updates the self.detected_colour variable with the received response.
+        '''
+        self.detected_colour = data
+
+    def request_colour(self) -> ColorRGBA:
+        '''
+        Publishes a request to the "colour_request" topic and subscribes to the
+        "box_colour" topic to receive the response. Returns ColorRGBA.
+        '''
+        self.detected_colour = None
+        request = Bool(); request.data = True
+        self.colour_pub.publish(request)
+
+        while not self.detected_colour:
+            time.sleep(0.01)
+        return self.detected_colour
 
     def position_error_callback(self, msg):
         # TODO -  populate class variable
