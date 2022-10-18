@@ -20,6 +20,10 @@ class StateMachine:
         self.position_error = 0
         # Assume joint controller runs faster than camera so no real need to track is position error is stale
         # TODO - camera input variables
+        self.ids = []
+        self.xs = []
+        self.yx = []
+        self.zrots = []
         # TODO - variables to store current state
             # i.e. placing block, picking up block, returning etc
 
@@ -45,6 +49,17 @@ class StateMachine:
 
     def camera_callback(self, msg):
         # TODO - populate class variables
+        for id in None:
+            if id in self.ids:
+                i = self.ids.index(id)
+                self.xs[i] = None
+                self.ys[i] = None
+                self.zrots[i] = None
+            else:
+                self.ids.append(id)
+                self.xs.append(None)
+                self.ys.append(None)
+                self.zrots.append(None)
         self.camera_stale = False
 
     def colour_detect_callback(self, data: ColorRGBA) -> None:
@@ -115,4 +130,9 @@ class StateMachine:
         read current state
         use block position and/or position error to change state or issue command to gripper or joint_controller
         '''
+        # do logic
+        if len(self.ids) == 1:
+            state_1(self.xs[0], self.ys[0])
+        pass
+        # publsh commands if needed
 
