@@ -145,8 +145,6 @@ class StateMachine:
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
 
-        pass
-
     def loop(self):
         '''
         State machine main loop
@@ -154,8 +152,8 @@ class StateMachine:
         use block position and/or position error to change state or issue command to gripper or joint_controller
         '''
         # do logic
-        if len(self.ids) == 1:
-            state_1(self.xs[0], self.ys[0])
-        pass
+        # if len(self.ids) == 1:
+        #     state_1(self.xs[0], self.ys[0])
+        self.pickup_block(0)
         # publsh commands if needed
 
