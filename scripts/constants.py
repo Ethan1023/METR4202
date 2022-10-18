@@ -68,3 +68,8 @@ STATE_ERROR = 5
 #COLOUR BLOCK LOCATIONS TODO - CHANGE THIS!
 PLACE_DICT = {"red": (0, 0)}
 
+
+# Other?
+VELOCITY_AVG_TIME = 0.5  # How long across to average time
+#VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
+OMEGA_THRESHOLD = 3 * 3.1415 / 30  # How fast counts as moving - tradeoff between how slow counts as moving and sensor noise

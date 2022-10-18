@@ -1,19 +1,21 @@
-import rospy
+#import rospy
 import time
 import numpy as np
 
 from std_msgs.msg import Bool, ColorRGBA, Float32
-#from sensor_msgs.msg import JointState
+#ColorRGBA = None
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 from inverse_kinematics import inv_kin
 from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, \
-                      L1, L2, L3, L4, PLACE_DICT
+                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT
+from maths import yaw_from_quat
 
 class StateMachine:
-    def __init__(self):
+    def __init__(self, dorospy = True):
         self.other_init()
-        self.rospy_init()
+        if dorospy:
+            self.rospy_init()
         print(f'StateMachine initialised')
 
     def other_init(self):
@@ -30,11 +32,14 @@ class StateMachine:
 
         self.x_hist = []  # List of lists of position history
         self.y_hist = []
-        self.t_hist = []  # List of update times
+        self.t_hist = []  # List of lists of update times
         self.x_vels = []  # List of velocities
         self.y_vels = []
-        self.start_time = time.time()   # update while blocks are not moving
-        self.stop_time = time.time()    # update while blocks are moving
+        self.omegas = []  # list of angular velocities
+        self.radii = []  # list of radii
+        self.omega = 0    # average angular velocity (0 if not known)
+        self.start_time = time.time()   # update while any blocks are not moving
+        self.stop_time = time.time()    # update while any blocks are moving
 
         # variables to store current state
         self.state = STATE_RESET
@@ -63,22 +68,74 @@ class StateMachine:
             time.sleep(0.01)
 
     def camera_callback(self, msg):
-        # TODO - populate class variables
-        # TODO - track position history and time to get velocity?
-        for id in None:
-            if id in self.ids:
-                i = self.ids.index(id)
-                self.xs[i] = None
-                self.ys[i] = None
-                self.zrots[i] = None
+        for box_transform in msg.transforms:
+            box_id = box_transform.fiducial_id
+            if box_id in self.ids:
+                i = self.ids.index(box_id)
+                self.xs[i] = box_transform.transform.translation.x
+                self.ys[i] = box_transform.transform.translation.y
+                self.zrots[i] = yaw_from_quat(box_transform.transform.rotation)
+                self.radii[i] = np.sqrt((self.xs[i]-BASE_TO_BELT)**2 + self.ys[i]**2)
+                # Update position 'queue'
+                self.x_hist[i].append(self.xs[i])
+                self.y_hist[i].append(self.ys[i])
+                self.t_hist[i].append(time.time())
             else:
-                self.ids.append(id)
-                self.xs.append(None)
-                self.ys.append(None)
-                self.zrots.append(None)
-            # TODO - append position and time to history
-            # If oldest history >X seconds old, calc velocity and delete (FIFO queue)
-            # Update timers
+                print(f'New box found!')
+                self.ids.append(box_id)
+                self.xs.append(box_transform.transform.translation.x)
+                self.ys.append(box_transform.transform.translation.y)
+                self.zrots.append(yaw_from_quat(box_transform.transform.rotation))
+                self.radii.append(np.sqrt((self.xs[-1]-BASE_TO_BELT)**2 + self.ys[-1]**2))
+                # Create 'queue' with new position
+                self.x_hist.append([self.xs[-1]])
+                self.y_hist.append([self.ys[-1]])
+                self.t_hist.append([time.time()])
+                # Velocity is unknown
+                self.x_vels.append(None)
+                self.y_vels.append(None)
+                self.omegas.append(None)
+        # If oldest history >X seconds old, delete (FIFO queue)
+        # Calculate velocity with oldest pos <X sec old and most recent val
+        for i, (t_hist, x_hist, y_hist) in enumerate(zip(self.t_hist, self.x_hist, self.y_hist)):
+            if len(t_hist) > 1:
+                if t_hist[-1] - t_hist[0] > VELOCITY_AVG_TIME:  # if oldest value is old enough
+                    # While second oldest value is old enough, clear oldest
+                    while t_hist[-1] - t_hist[1] > VELOCITY_AVG_TIME:
+                        del x_hist[0]
+                        del y_hist[0]
+                        del t_hist[0]
+                    # Calculate velocities
+                    self.x_vels[i] = (self.xs[i] - x_hist[0]) / (t_hist[-1] - t_hist[0])
+                    self.y_vels[i] = (self.ys[i] - y_hist[0]) / (t_hist[-1] - t_hist[0])
+                    self.omegas[i] = np.sqrt(self.x_vels[i]**2 + self.y_vels[i]**2) / self.radii[i]
+            else:
+                # Set to none if can't track? TODO
+                self.x_vels[i] = None
+                self.y_vels[i] = None
+                self.omegas[i] = None
+        total = 0
+        count = 0
+        for omega in self.omegas:
+            if omega is not None:
+                total += omega
+                count += 1
+        if not count == 0:
+            self.omega = total / count
+        else:
+            self.omega = 0
+        # Update timers
+        #maxvel = -1
+        #for x_vel, y_vel in zip(self.x_vels, self.y_vels):
+        #    if x_vel is not None:
+        #        maxvel = max(maxvel, np.sqrt(x_vel**2 + y_vel**2))
+        #if maxvel > VELOCITY_THRESHOLD:
+        if self.omega > OMEGA_THRESHOLD:
+            self.stop_time = time.time()
+            print(f'Time since started = {self.stop_time - self.start_time} s')
+        else:
+            self.start_time = time.time()
+            print(f'Time since stopped = {self.start_time - self.stop_time} s')
         self.camera_stale = False
 
     def colour_detect_callback(self, data: ColorRGBA) -> None:
