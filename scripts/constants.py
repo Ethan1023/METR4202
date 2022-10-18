@@ -60,8 +60,23 @@ Y_CENTRE = 0
 #TIME CONSTANTS
 GRAB_TIME = 0.5
 
-
 THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
 THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
 RADIUS_FENCE = 0.14  # If larger than this radius, fence colliusions should be impossible - TODO
 
+#STATE CONSTANTS
+STATE_RESET = 0
+STATE_FIND = 1
+STATE_GRAB = 2
+STATE_COLOUR = 3
+STATE_PLACE = 4
+STATE_ERROR = 5
+
+#COLOUR BLOCK LOCATIONS TODO - CHANGE THIS!
+PLACE_DICT = {"red": (0, 0)}
+
+
+# Other?
+VELOCITY_AVG_TIME = 0.5  # How long across to average time
+#VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
+OMEGA_THRESHOLD = 3 * 3.1415 / 30  # How fast counts as moving - tradeoff between how slow counts as moving and sensor noise

@@ -98,13 +98,13 @@ class BoxTransform:
         transform = Transform(); transform.translation = p; transform.rotation = R
         return transform
 
-    def run(self):
+    def run(self) -> None:
         '''Runs the box_detection node.'''
         print('box_transform ready')
         self.subscribe()
 
     @staticmethod
-    def test():
+    def test() -> None:
         '''
         Creates a new node that subscribes to "box_transforms" and prints
         the output.
