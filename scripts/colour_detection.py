@@ -31,7 +31,7 @@ class ColourDetection:
         if (r == 1 and g < 0.5 and b < 0.5):
             return 'red'
 
-        if (r < 0.5 and g == 1 and b < 0.5):
+        if (r < 0.6 and g == 1 and b < 0.5):
             return 'green'
 
         if (r < 0.6 and g > 0.8 and b > 0.8):
