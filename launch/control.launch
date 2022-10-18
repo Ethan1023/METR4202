@@ -1,0 +1,9 @@
+<launch>
+
+  <!-- Start Dynamixel controller -->
+  <include file="$(find dynamixel_interface)/launch/dynamixel_interface_controller.launch"/>
+
+  <!-- Start joint controller (incl. inv. kin. and collision detection) -->
+  <node pkg="metr4202" type="joint_controller_ros.py" name="joint_controller"/>
+
+</launch>

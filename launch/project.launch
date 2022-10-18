@@ -1,0 +1,12 @@
+<launch>
+
+  <!-- Start joint controller and inverse kinematics -->
+  <include file="$(find metr4202)/launch/control.launch"/>
+
+  <!-- Start camera and detection -->
+  <include file="$(find metr4202)/launch/detection.launch"/>
+
+  <!-- Start state machine -->
+  <node pkg="metr4202" type="state_machine_ros.py" name="state_machine"/>
+
+</launch>
