@@ -2,7 +2,7 @@ import rospy
 import time
 import numpy as np
 
-from std_msgs.msg import Bool, ColorRGBA
+from std_msgs.msg import Bool, ColorRGBA, Float32
 #from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 from inverse_kinematics import inv_kin
@@ -39,7 +39,7 @@ class StateMachine:
         # Subscribe to camera - TODO
         rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
         # Subscribe to angle error - TODO
-        rospy.Subscriber('position_error', None, self.position_error_callback)
+        rospy.Subscriber('position_error', Float32, self.position_error_callback)
         # Subscribe to colour detection
         rospy.Subscriber('box_colour', ColorRGBA, self.colour_detect_callback)
 
@@ -49,6 +49,7 @@ class StateMachine:
 
     def camera_callback(self, msg):
         # TODO - populate class variables
+        # TODO - track position history and time to get velocity?
         for id in None:
             if id in self.ids:
                 i = self.ids.index(id)
@@ -82,8 +83,7 @@ class StateMachine:
         return self.detected_colour
 
     def position_error_callback(self, msg):
-        # TODO -  populate class variable
-        pass
+        self.position_error = msg.data
 
     def desired_pos_publisher(self, coords, pitch=None):
         '''

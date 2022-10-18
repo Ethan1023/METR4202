@@ -9,6 +9,7 @@ import time
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
 from metr4202.msg import Pos  # Custom messages from msg/
+from std_msgs.msg import Float32
 from inverse_kinematics import inv_kin
 from forward_kinematics import derivePoE, PoE
 from modern_robotics import TransToRp
@@ -137,7 +138,8 @@ class JointController:
         self.joint_pub.publish(joint_state)
 
     def error_publisher(self, error):
-        error_msg = None # TODO - message type and population
+        error_msg = Float32()
+        error_msg.data = error
         self.error_pub.publish(error_msg)
 
     def get_current_pos(self, thetas = None):
