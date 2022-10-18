@@ -1,4 +1,10 @@
-#import rospy
+#!/usr/bin/env python3
+
+'''
+TODO: documentation
+'''
+
+import rospy
 import time
 import numpy as np
 
