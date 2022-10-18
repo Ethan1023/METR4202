@@ -5,6 +5,7 @@ import numpy as np
 from std_msgs.msg import Bool, ColorRGBA
 #from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos  # Custom messages from msg/
+from inverse_kinematics import inv_kin
 
 class StateMachine:
     def __init__(self):
@@ -26,7 +27,7 @@ class StateMachine:
         # Create node
         rospy.init_node('state_machine', anonymous=False)
         # Publish to desired end effector
-        self.joint_pub = rospy.Publisher('desired_pos', Pos, queue_size=1)
+        self.pos_pub = rospy.Publisher('desired_pos', Pos, queue_size=1)
         # Publish to request box colour
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
         # Subscribe to camera - TODO
@@ -66,6 +67,30 @@ class StateMachine:
     def position_error_callback(self, msg):
         # TODO -  populate class variable
         pass
+
+    def desired_pos_publisher(self, coords, pitch=None):
+        '''
+        Accept coords and optional pitch
+        Return if command was issued
+        if pitch is not supplied, try as straight down as possible
+        '''
+        pos = Pos()
+        pos.x, pos.y, pos.z = coords
+        if pitch is not None:  # if pitch supplied, try to reach it or fail
+            if inv_kin(coords, pitch, self_check=False, check_possible=True):
+                pos.pitch = pitch
+                self.pos_pub.publish(pos)
+                return True
+            return False
+        else:  # Otherwise use default and increment
+            for pitch in np.linspace(-np.pi/2, 0, 10):
+                if inv_kin(coords, pitch, self_check=False, check_possible=True):
+                    pos.pitch = pitch
+                    self.pos_pub.publish(pos)
+                    return True
+            return False
+
+
 
     def run(self):
         while not rospy.is_shutdown():
