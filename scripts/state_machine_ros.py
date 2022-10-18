@@ -4,7 +4,7 @@ import numpy as np
 
 from std_msgs.msg import Bool, ColorRGBA
 #from sensor_msgs.msg import JointState
-from metr4202.msg import BoxTransformArray, Pos  # Custom messages from msg/
+from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 from inverse_kinematics import inv_kin
 
 class StateMachine:
@@ -30,6 +30,8 @@ class StateMachine:
         self.pos_pub = rospy.Publisher('desired_pos', Pos, queue_size=1)
         # Publish to request box colour
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
+        # Publish to gripper
+        self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
         # Subscribe to camera - TODO
         rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
         # Subscribe to angle error - TODO
@@ -90,7 +92,13 @@ class StateMachine:
                     return True
             return False
 
-
+    def gripper_publisher(self, open_grip=True):
+        '''
+        Open gripper?
+        '''
+        msg = GripperState()
+        msg.open = open_grip
+        self.gripper_pub.publish(msg)
 
     def run(self):
         while not rospy.is_shutdown():
