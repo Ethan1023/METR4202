@@ -169,3 +169,6 @@ class StateMachine:
         self.pickup_block(0)
         # publsh commands if needed
 
+
+if __name__ == '__main__':
+    StateMachine().loop()
