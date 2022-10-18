@@ -20,3 +20,6 @@ def rot(theta, axis):
         return np.array([[np.cos(theta),  -np.sin(theta), 0],
                          [np.sin(theta),  np.cos(theta),  0],
                          [0,              0,              1]])
+
+def yaw_from_quat(quat):
+    return np.arctan2(2*(quat.w*quat.z + quat.x*quat.y), 1-2*(quat.y**2+quat.z**2))
