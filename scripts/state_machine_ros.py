@@ -21,7 +21,6 @@ class StateMachine:
         self.position_error = 0
         # Assume joint controller runs faster than camera so no real need to track is position error is stale
         # TODO - camera input variables
-        # TODO - subscribe to camera then update positions
         self.ids = []
         self.xs = []
         self.ys = []
