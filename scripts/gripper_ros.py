@@ -23,6 +23,7 @@ class GripperController:
         self.rpi = pigpio.pi()
         self.rpi_pin = 18
         self.rpi.set_mode(self.rpi_pin, pigpio.OUTPUT)
+        print(f'Gripper node initialised')
 
     def subscribe(self) -> None:
         '''Subscribes to the "gripper_state" topic.'''
@@ -32,9 +33,11 @@ class GripperController:
             state = gripper_state.open
             print('gripper do:', end='')
             print('open' if state else 'grip')
+            #self.rpi.write(self.rpi_pin, 1)
             self.rpi.set_servo_pulsewidth(self.rpi_pin, self.position[state])
 
         rospy.Subscriber('gripper_state', GripperState, callback)
+        print(f'Gripper subscribed')
         rospy.spin()
 
     def run(self) -> None:

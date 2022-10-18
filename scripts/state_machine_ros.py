@@ -14,7 +14,7 @@ from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages
 from inverse_kinematics import inv_kin
 from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, \
-                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT
+                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES
 from maths import yaw_from_quat
 
 class StateMachine:
@@ -142,7 +142,8 @@ class StateMachine:
         else:
             self.start_time = time.time()
             print(f'Time since stopped = {self.start_time - self.stop_time} s')
-        self.camera_stale = False
+        if len(self.ids) > 0:
+            self.camera_stale = False
 
     def colour_detect_callback(self, data: ColorRGBA) -> None:
         '''
@@ -213,13 +214,19 @@ class StateMachine:
         z = EMPTY_HEIGHT
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
-        while self.position_error > ERROR_TOL:
+        print(self.position_error)
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+            print(self.position_error)
         z = GRABBY_HEIGHT
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
-        while self.position_error > ERROR_TOL:
+        print(2)
+        print(self.position_error)
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+            print(2)
+            print(self.position_error)
         self.gripper_publisher(False)
         time.sleep(GRAB_TIME)
         z = CARRY_HEIGHT
@@ -235,7 +242,7 @@ class StateMachine:
         # do logic
         # if len(self.ids) == 1:
         #     state_1(self.xs[0], self.ys[0])
-        print(f"State = {self.state}")
+        print(f"State = {STATE_NAMES[self.state]}")
         self.state = self.state_funcs[self.state]()
         # self.pickup_block(0)
         # publsh commands if needed
@@ -245,7 +252,7 @@ class StateMachine:
         self.gripper_publisher()
         coords = (L4, 0, L1+L2+L3)
         self.desired_pos_publisher(coords, 0)
-        while self.position_error > ERROR_TOL:
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         return STATE_FIND
 
@@ -264,10 +271,11 @@ class StateMachine:
     def state_colour(self):
         # Checking the block colour
         # If fails, open gripper and return to state_find
-        coords = (BASE_TO_BELT, 0, 0.3) # TODO - get position
+        print('colour')
+        coords = (BASE_TO_BELT, 0, 0.2) # TODO - get position
         pitch = 0
         self.desired_pos_publisher(coords, pitch)
-        while self.position_error > ERROR_TOL:
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         self.request_colour()
         return STATE_COLOUR # TEMPORARY, FIX THIS - TODO

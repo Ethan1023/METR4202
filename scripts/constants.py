@@ -71,6 +71,7 @@ STATE_GRAB = 2
 STATE_COLOUR = 3
 STATE_PLACE = 4
 STATE_ERROR = 5
+STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error']
 
 #COLOUR BLOCK LOCATIONS TODO - CHANGE THIS!
 PLACE_DICT = {"red": (0, 0)}

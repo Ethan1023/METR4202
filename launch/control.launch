@@ -6,4 +6,7 @@
   <!-- Start joint controller (incl. inv. kin. and collision detection) -->
   <node pkg="metr4202" type="joint_controller_ros.py" name="joint_controller"/>
 
+  <!-- Start gripper controller (incl. inv. kin. and collision detection) -->
+  <node pkg="metr4202" type="gripper_ros.py" name="gripper"/>
+
 </launch>
