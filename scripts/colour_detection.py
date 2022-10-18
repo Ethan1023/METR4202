@@ -11,6 +11,7 @@ from std_msgs.msg import Bool, ColorRGBA
 
 class ColourDetection:
     def __init__(self, publisher_queue: int = 10) -> None:
+        rospy.init_node('colour_detection', anonymous=False)
         self.publisher_queue = publisher_queue
         self.publisher = rospy.Publisher('box_colour', ColorRGBA,
             queue_size=publisher_queue)
