@@ -8,10 +8,8 @@ def blocks_from_arm(x, y):
     '''
     Calculates the distances (norm) of each of the blocks from the robot base.
     args: list of x and y coordinates
-    returns: list of block distances
+    returns: list of block distances from base
     ''' 
-    #TO DO: change to calculate xy distance from arm, instead of base
-    #this is currently distance of block from the base
     block_distances = []
 
     #create list of coords
