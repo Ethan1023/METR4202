@@ -26,6 +26,15 @@ class StateMachine:
         self.xs = []
         self.ys = []
         self.zrots = []
+
+        self.x_hist = []  # List of lists of position history
+        self.y_hist = []
+        self.t_hist = []  # List of update times
+        self.x_vels = []  # List of velocities
+        self.y_vels = []
+        self.start_time = time.time()   # update while blocks are not moving
+        self.stop_time = time.time()    # update while blocks are moving
+
         # TODO - variables to store current state
             # i.e. placing block, picking up block, returning etc
 
@@ -63,6 +72,9 @@ class StateMachine:
                 self.xs.append(None)
                 self.ys.append(None)
                 self.zrots.append(None)
+            # TODO - append position and time to history
+            # If oldest history >X seconds old, calc velocity and delete (FIFO queue)
+            # Update timers
         self.camera_stale = False
 
     def colour_detect_callback(self, data: ColorRGBA) -> None:
