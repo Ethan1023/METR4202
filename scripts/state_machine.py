@@ -4,8 +4,6 @@ from constants import GRABBY_HEIGHT
 def state_detection(box_object, joint_controller_object):
     pass
 
-def main():
-    pass
 
 def block_distances(coords_list):
     '''
@@ -29,7 +27,3 @@ def grab_block(x, y):  #matrix in array form
     "don't need to worry about z now"
     "also takes charge of what block to pick up"
     return np.array([x, y, GRABBY_HEIGHT])
-
-
-if __name__ == "__main__":
-    main()
