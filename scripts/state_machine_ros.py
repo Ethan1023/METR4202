@@ -6,6 +6,7 @@ from std_msgs.msg import Bool, ColorRGBA, Float32
 #from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 from inverse_kinematics import inv_kin
+from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME
 
 class StateMachine:
     def __init__(self):
@@ -22,7 +23,7 @@ class StateMachine:
         # TODO - camera input variables
         self.ids = []
         self.xs = []
-        self.yx = []
+        self.ys = []
         self.zrots = []
         # TODO - variables to store current state
             # i.e. placing block, picking up block, returning etc
@@ -123,6 +124,28 @@ class StateMachine:
                 return 0
             self.camera_stale = True
             self.loop()
+
+    def pickup_block(self, block_id):
+        i = self.ids.index(block_id)
+        x = self.xs[i]
+        y = self.ys[i]
+        z = EMPTY_HEIGHT
+        coords = (x, y, z)
+        self.desired_pos_publisher(coords)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        z = GRABBY_HEIGHT
+        coords = (x, y, z)
+        self.desired_pos_publisher(coords)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        self.gripper_publisher(False)
+        time.sleep(GRAB_TIME)
+        z = CARRY_HEIGHT
+        coords = (x, y, z)
+        self.desired_pos_publisher(coords)
+
+        pass
 
     def loop(self):
         '''
