@@ -258,13 +258,13 @@ class StateMachine:
     def state_colour(self):
         # Checking the block colour
         # If fails, open gripper and return to state_find
-        coords = None # TODO - get position
-        pitch = None
+        coords = (BASE_TO_BELT, 0, 0.3) # TODO - get position
+        pitch = 0
         self.desired_pos_publisher(coords, pitch)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         self.request_colour()
-        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
+        return STATE_COLOUR # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
         # Get destination from state_colour
