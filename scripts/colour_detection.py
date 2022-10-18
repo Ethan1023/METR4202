@@ -41,11 +41,40 @@ class ColourDetection:
         rospy.Subscriber('test_colour', ColorRGBA, update_callback)
         rospy.spin()
 
-    def run(self):
+    def run(self) -> None:
         '''Runs the colour_detection node.'''
         print('colour_detection ready')
         self.subscribe()
 
+    @staticmethod
+    def test() -> None:
+        '''
+        Creates a new node that periodically publishes requests to
+        "request_colour" and subscribes to (and prints) the response.
+        '''
+        import time
+
+        def callback(colour):
+            print(f' Received response:', (colour.r, colour.g, colour.b))
+
+        rospy.init_node('test_colour_detection', anonymous=False)
+        rospy.Subscriber('box_colour', ColorRGBA, callback)
+
+        publisher = rospy.Publisher('request_colour', Bool, queue_size=1)
+        request = Bool(); request.data = True
+
+        requests_sent = 0
+        while requests_sent < 10:
+            publisher.publish(request)
+            print(f'[x] Sent request {requests_sent+1}')
+
 
 if __name__ == '__main__':
+    import sys
+
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--test':
+            ColourDetection.test()
+            sys.exit(0)
+
     ColourDetection().run()
