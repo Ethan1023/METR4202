@@ -8,10 +8,8 @@ def blocks_from_arm(x, y):
     '''
     Calculates the distances (norm) of each of the blocks from the robot base.
     args: list of x and y coordinates
-    returns: list of block distances
+    returns: list of block distances from base
     ''' 
-    #TO DO: change to calculate xy distance from arm, instead of base
-    #this is currently distance of block from the base
     block_distances = []
 
     #create list of coords
@@ -51,7 +49,7 @@ def bl_to_bl_dist(xs, ys):
             #calculate distance from one block to another
             d = np.hypot((x-xo), (y-yo))
             d_list.append(d)
-        #add together all the distances to teh other points
+        #add together all the distances to the other points
         total_d = sum(d_list)
         total_ds.append(total_d)
     return total_ds
@@ -66,4 +64,4 @@ def grab_pos(x, y):  #matrix in array form
 
 
 def which_state():
-    
+    pass
