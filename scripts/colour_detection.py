@@ -28,6 +28,7 @@ class ColourDetection:
             Publishes the colour in the "self.detected_colour" variable to
             the "box_colour" topic.
             '''
+            print('[*] received request')
             return self.colour # request probably won't be False...
 
         def update_callback(colour: ColorRGBA) -> None:
@@ -60,7 +61,7 @@ class ColourDetection:
         rospy.init_node('test_colour_detection', anonymous=False)
         rospy.Subscriber('box_colour', ColorRGBA, callback)
 
-        publisher = rospy.Publisher('request_colour', Bool, queue_size=1)
+        publisher = rospy.Publisher('colour_request', Bool, queue_size=1)
         request = Bool(); request.data = True
 
         requests_sent = 0
