@@ -29,7 +29,9 @@ class ColourDetection:
             the "box_colour" topic.
             '''
             print('[*] received request')
-            return self.colour # request probably won't be False...
+            # Request probably won't be "false"...
+            print(type(self.detected_colour))
+            self.publisher.publish(self.detected_colour)
 
         def update_callback(colour: ColorRGBA) -> None:
             '''
@@ -39,7 +41,7 @@ class ColourDetection:
             self.detected_colour = colour
 
         rospy.Subscriber('colour_request', Bool, response_callback)
-        rospy.Subscriber('test_colour', ColorRGBA, update_callback)
+        rospy.Subscriber('test_color', ColorRGBA, update_callback)
         rospy.spin()
 
     def run(self) -> None:
@@ -65,9 +67,11 @@ class ColourDetection:
         request = Bool(); request.data = True
 
         requests_sent = 0
-        while requests_sent < 10:
+        while True:
             publisher.publish(request)
             print(f'[x] Sent request {requests_sent+1}')
+            requests_sent += 1
+            time.sleep(1)
 
 
 if __name__ == '__main__':
