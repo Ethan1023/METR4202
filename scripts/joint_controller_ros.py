@@ -3,18 +3,23 @@
 '''
 Use this - https://github.com/UQ-METR4202/dynamixel_interface/blob/master/tutorials/tutorial_1_using_the_controller.md
 '''
-import rospy
-import numpy as np
+
 import time
-from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Pose
-from metr4202.msg import Pos  # Custom messages from msg/
+
+import modern_robotics as mr
+import numpy as np
+import rospy
+
 from std_msgs.msg import Float32
-from inverse_kinematics import inv_kin
-from forward_kinematics import derivePoE, PoE
-from modern_robotics import TransToRp
-from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
+from geometry_msgs.msg import Pose
+from sensor_msgs.msg import JointState
+from metr4202.msg import Pos  # Custom messages from msg/
+
 from collision_detect import modify_path, CollisionHandler
+from forward_kinematics import derivePoE, PoE
+from inverse_kinematics import inv_kin
+
+from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
 
 class JointController:
     '''
@@ -32,8 +37,8 @@ class JointController:
         rospy.init_node('joint_controller', anonymous=False)
         # Publish to desired joint states
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
-        # Publish to position error - TODO set message type
-        self.error_pub = rospy.Publisher('position_error', None, queue_size=1)
+        # Publish to position error
+        self.error_pub = rospy.Publisher('position_error', Float32, queue_size=1)
         # Subscribe to actual joint states
         rospy.Subscriber('joint_states', JointState, self.joint_state_callback)
         # Subscribe to requested position
@@ -152,7 +157,7 @@ class JointController:
             thetas = self.thetas
         # Obtain end effector configuration
         T = PoE(self.Tsb, self.screws, self.thetas)
-        R, p = TransToRp(T)
+        R, p = mr.TransToRp(T)
         pitch = np.pi/2 - np.sum(thetas[1:])
         return p, pitch
 
