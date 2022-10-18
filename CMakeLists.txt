@@ -53,6 +53,7 @@ add_message_files(
    FILES
    Pos.msg
    Thetas.msg
+   GripperState.msg
    BoxTransform.msg
    BoxTransformArray.msg
 )

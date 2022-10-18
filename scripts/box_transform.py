@@ -58,7 +58,7 @@ class BoxTransform:
             publishes it.
             '''
             box_transforms = []
-    
+
             for fiducial_transform in fiducial_transforms.transforms:
                 # Unpack FiducialTransform message object
                 fiducial_id = fiducial_transform.fiducial_id
@@ -75,7 +75,7 @@ class BoxTransform:
                 box_transform.transform = S
 
                 box_transforms.append(box_transform)
-   
+
             # Publish BoxTransformArray message object
             box_transform_array = BoxTransformArray()
             box_transform_array.transforms = box_transforms
@@ -120,8 +120,9 @@ class BoxTransform:
 if __name__ == '__main__':
     import sys
 
-    if sys.argv[1] == '--test':
-        BoxTransform.test()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--test':
+            BoxTransform.test()
+            sys.exit(0)
 
-    else:
-        BoxTransform().run()
+    BoxTransform().run()
