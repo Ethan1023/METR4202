@@ -17,7 +17,7 @@ from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB
                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
                       STATE_TOSS, \
                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-                      RAD_OFFSET
+                      RAD_OFFSET, H_BLOCK
 from maths import yaw_from_quat
 from threading import Lock
 
@@ -342,10 +342,10 @@ class StateMachine:
         self.desired_pos_publisher(coords, pitch)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-        print(f'Requestself.desired_idlour')
-        self.request_colour()
-        print(f'Colour = {self.detected_colour}')
-        return STATE_RESET # TEMPORARY, FIX THIS - TODO
+        # print(f'Requestself.desired_idlour')
+        # self.request_colour()
+        # print(f'Colour = {self.detected_colour}')
+        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
         # Get destination from state_colour
@@ -354,20 +354,21 @@ class StateMachine:
         # Once position error is low enough, put block down then return to state_reset
         # TODO - create dictionary of tuples within constants file for colours which returns xy
         # TODO - get z values
+        self.detected_colour = "red"
         x, y = PLACE_DICT[self.detected_colour]
-        z = None
+        z = CARRY_HEIGHT
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
-        z = None
+        z = H_BLOCK
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         self.gripper_publisher(True)
         time.sleep(GRAB_TIME)
-        z = None
+        z = H_BLOCK
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
         return STATE_RESET

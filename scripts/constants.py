@@ -77,7 +77,7 @@ STATE_TOSS = 7
 STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss']
 
 #COLOUR BLOCK LOCATIONS TODO - CHANGE THIS!
-PLACE_DICT = {"red": (0, 0)}
+PLACE_DICT = {"red": (-0.15, 0.05)}
 
 
 # Other?
