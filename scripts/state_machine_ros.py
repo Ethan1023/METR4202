@@ -345,7 +345,7 @@ class StateMachine:
         # print(f'Requestself.desired_idlour')
         # self.request_colour()
         # print(f'Colour = {self.detected_colour}')
-        return STATE_TOSS # TEMPORARY, FIX THIS - TODO
+        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
         # Get destination from state_colour
@@ -356,20 +356,20 @@ class StateMachine:
         # TODO - get z values
         #self.detected_colour = "red"
         #x, y = PLACE_DICT[self.detected_colour]
-        coords = (-0.15, 0.15, 0.2)
-        self.desired_pos_publisher(coords)
+        coords = (-0.1, 0.1, 0.2)
+        self.desired_pos_publisher(coords, 0)
         print("Up")
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         #self.gripper_publisher()
-        coords = (-0.15, 0.15, -H_BLOCK)
+        coords = (-0.1, 0.1, 0.2)
         self.desired_pos_publisher(coords, -np.pi/2)
         print("Placed")
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         self.gripper_publisher()
         time.sleep(GRAB_TIME)
-        coords = (-0.15, 0.15, GRABBY_HEIGHT)
+        coords = (-0.1, 0.1, GRABBY_HEIGHT)
         self.desired_pos_publisher(coords)
         print("Back up")
         while self.position_error > ERROR_TOL:
