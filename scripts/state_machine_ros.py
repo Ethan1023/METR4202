@@ -345,7 +345,7 @@ class StateMachine:
         # print(f'Requestself.desired_idlour')
         # self.request_colour()
         # print(f'Colour = {self.detected_colour}')
-        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
+        return STATE_TOSS # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
         # Get destination from state_colour
