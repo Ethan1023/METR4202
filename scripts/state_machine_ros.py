@@ -317,7 +317,7 @@ class StateMachine:
         # TODO: ADD LOGIC
         while len(self.ids) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
-        self.moving_grab_update()
+        #self.moving_grab_update()
         self.desired_id = self.ids[0] # TEMPORARY, FIX THIS - TODO
         return STATE_GRAB
 
@@ -345,7 +345,7 @@ class StateMachine:
         print(f'Requestself.desired_idlour')
         self.request_colour()
         print(f'Colour = {self.detected_colour}')
-        return STATE_COLOUR # TEMPORARY, FIX THIS - TODO
+        return STATE_RESET # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
         # Get destination from state_colour
