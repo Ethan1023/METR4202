@@ -356,18 +356,18 @@ class StateMachine:
         # TODO - get z values
         #self.detected_colour = "red"
         #x, y = PLACE_DICT[self.detected_colour]
-        coords = (0.05, 0.15, 0.2)
+        coords = (-0.15, 0.15, 0.2)
         self.desired_pos_publisher(coords)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
-        self.gripper_publisher()
-        coords = (0.05, 0.15, H_BLOCK)
+        #self.gripper_publisher()
+        coords = (-0.15, 0.15, H_BLOCK)
         self.desired_pos_publisher(coords, -np.pi/2)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         self.gripper_publisher()
         time.sleep(GRAB_TIME)
-        coords = (0.05, 0.15, GRABBY_HEIGHT)
+        coords = (-0.15, 0.15, GRABBY_HEIGHT)
         self.desired_pos_publisher(coords)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
