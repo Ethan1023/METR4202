@@ -360,6 +360,7 @@ class StateMachine:
         self.desired_pos_publisher(coords)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
+        self.gripper_publisher()
         coords = (0.05, 0.15, H_BLOCK)
         self.desired_pos_publisher(coords, -np.pi/2)
         while self.position_error > ERROR_TOL:
@@ -368,6 +369,8 @@ class StateMachine:
         time.sleep(GRAB_TIME)
         coords = (0.05, 0.15, GRABBY_HEIGHT)
         self.desired_pos_publisher(coords)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
         return STATE_RESET
 
     def state_toss(self):
