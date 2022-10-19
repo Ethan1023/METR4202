@@ -60,6 +60,7 @@ class StateMachine:
                             self.state_trap, self.state_toss)
         self.desired_id = None
         self.moving = True
+        self.grab_moving = False
 
     def rospy_init(self):
         # Create node
@@ -251,6 +252,15 @@ class StateMachine:
             #self.camera_stale = True
             self.loop()
 
+    def moving_grab_update(self):
+        if not self.moving and (time.time()-self.stop_time) > 2: #TODO - change to a constant
+            self.grab_moving = False
+        elif self.moving and (self.start_time - self.old_stop_time) > 2:
+            self.grab_moving = False
+        else:
+            self.grab_moving = True
+        print(f"Belt moving = {self.grab_moving}")
+
     def pickup_block(self, block_id):
         i = self.ids.index(block_id)
         x = self.xs[i]
@@ -307,6 +317,7 @@ class StateMachine:
         # TODO: ADD LOGIC
         while len(self.ids) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
+        self.moving_grab_update()
         self.desired_id = self.ids[0] # TEMPORARY, FIX THIS - TODO
         return STATE_GRAB
 
@@ -318,7 +329,7 @@ class StateMachine:
         alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
             return alt_state
-        return STATE_TOSS
+        return STATE_COLOUR
 
     def state_trap(self):
         return STATE_TRAP
