@@ -163,7 +163,7 @@ class CollisionHandler:
         '''
         #Gripper height
         if self.z_gripper < -(H_BASE - H_BLOCK/2):
-        #     #gripper must never be lower than the height of a block on the ground
+        #gripper must never be lower than the height of a block on the ground
             return False        
 
         #Gripper angle

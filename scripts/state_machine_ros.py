@@ -17,7 +17,7 @@ from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB
                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
                       STATE_TOSS, \
                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-                      RAD_OFFSET, H_BLOCK, H_BELT
+                      RAD_OFFSET, H_BLOCK
 from maths import yaw_from_quat
 from threading import Lock
 
@@ -362,7 +362,7 @@ class StateMachine:
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         #self.gripper_publisher()
-        coords = (-0.15, 0.15, H_BELT- H_BLOCK)
+        coords = (-0.15, 0.15, -H_BLOCK)
         self.desired_pos_publisher(coords, -np.pi/2)
         print("Placed")
         while self.position_error > ERROR_TOL:
