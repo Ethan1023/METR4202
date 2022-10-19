@@ -1,5 +1,5 @@
 import numpy as np
-from constants import H_BLOCK, H_BASE, RAD_BELT, H_FENCE, W_FENCE, L_FENCE, L_BASE, W_BASE, BASE_TO_BELT, BASE_TO_FENCE, THETA_BELT, THETA_FENCE, RADIUS_FENCE
+from constants import H_BLOCK, H_BASE, RAD_BELT, H_FENCE, W_FENCE, L_FENCE, L_BASE, W_BASE, BASE_TO_BELT, BASE_TO_FENCE, THETA_BELT, THETA_FENCE, RADIUS_FENCE, GRABBY_HEIGHT
 
 
 def modify_path(current_pos, desired_pos, printing=True):
@@ -39,7 +39,7 @@ def modify_path(current_pos, desired_pos, printing=True):
             temp_coords = des_coords * np.array([1, 1, 0]) + current_coords * np.array([0, 0, 1])
             if printing:
                 print(f'COLLISION AVOIDANCE WARNING')
-                print(f'Increasing desired height from {des_coords[2]} to {temp_coords[3]} to avoid potential conveyor collision')
+                print(f'Increasing desired height from {des_coords[2]} to {temp_coords[2]} to avoid potential conveyor collision')
     else:
         # Likely to be triggered when moving from side to above conveyor
         # Current height and desired position collide with belt
@@ -88,7 +88,7 @@ def avoids_belt(pos):
     xy_belt = (x_gripper < (np.sqrt(belt_rad**2 - y_gripper**2) + BASE_TO_BELT)) and\
               (x_gripper > (-(np.sqrt(belt_rad**2 - y_gripper**2)) + BASE_TO_BELT))
     
-    if xy_belt and (z_gripper - H_BLOCK/2) < (H_BLOCK/4):
+    if xy_belt and z_gripper < 0: #GRABBY_HEIGHT*0.9: #(z_gripper - H_BLOCK/2) < (H_BLOCK/4):
         return False
     else:
         return True

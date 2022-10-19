@@ -228,6 +228,7 @@ class JointController:
             print(f'loop error = {error}')
             print()
             print()
+        self.error_publisher(error)
         return True
 
 def main():

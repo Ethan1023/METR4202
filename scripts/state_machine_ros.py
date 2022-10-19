@@ -9,13 +9,17 @@ import time
 import numpy as np
 
 from std_msgs.msg import Bool, ColorRGBA, Float32
+from sensor_msgs.msg import JointState
 #ColorRGBA = None
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 from inverse_kinematics import inv_kin
 from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
-                      STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, \
-                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES
+                      STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
+                      STATE_TOSS, \
+                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
+                      RAD_OFFSET
 from maths import yaw_from_quat
+from threading import Lock
 
 class StateMachine:
     def __init__(self, dorospy = True):
@@ -25,10 +29,11 @@ class StateMachine:
         print(f'StateMachine initialised')
 
     def other_init(self):
+        self.box_lock = Lock()
         #self.theta_stale = True
         self.printing = True
         self.camera_stale = True
-        self.position_error = 0
+        self.position_error = ERROR_TOL*10
         # Assume joint controller runs faster than camera so no real need to track is position error is stale
         # TODO - camera input variables
         self.ids = []
@@ -46,12 +51,15 @@ class StateMachine:
         self.omega = 0    # average angular velocity (0 if not known)
         self.start_time = time.time()   # update while any blocks are not moving
         self.stop_time = time.time()    # update while any blocks are moving
+        self.old_stop_time = time.time()
 
         # variables to store current state
         self.state = STATE_RESET
         self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
-                            self.state_colour, self.state_place, self.state_error)
+                            self.state_colour, self.state_place, self.state_error,\
+                            self.state_trap, self.state_toss)
         self.desired_id = None
+        self.moving = True
 
     def rospy_init(self):
         # Create node
@@ -60,6 +68,8 @@ class StateMachine:
         self.pos_pub = rospy.Publisher('desired_pos', Pos, queue_size=1)
         # Publish to request box colour
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
+        # Publish to desired joint states for direct access
+        self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
         # Publish to gripper
         self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
         # Subscribe to camera - TODO
@@ -74,6 +84,7 @@ class StateMachine:
             time.sleep(0.01)
 
     def camera_callback(self, msg):
+        self.box_lock.acquire()
         for box_transform in msg.transforms:
             box_id = box_transform.fiducial_id
             if box_id in self.ids:
@@ -107,11 +118,14 @@ class StateMachine:
             if len(t_hist) > 1:
                 if t_hist[-1] - t_hist[0] > VELOCITY_AVG_TIME:  # if oldest value is old enough
                     # While second oldest value is old enough, clear oldest
-                    while t_hist[-1] - t_hist[1] > VELOCITY_AVG_TIME:
+                    while len(t_hist) > 2 and t_hist[-1] - t_hist[1] > VELOCITY_AVG_TIME:
                         del x_hist[0]
                         del y_hist[0]
                         del t_hist[0]
                     # Calculate velocities
+                    print(f'{self.x_vels[i]}')
+                    print(f'={self.xs[i]}')
+                    print(f'- {t_hist}')
                     self.x_vels[i] = (self.xs[i] - x_hist[0]) / (t_hist[-1] - t_hist[0])
                     self.y_vels[i] = (self.ys[i] - y_hist[0]) / (t_hist[-1] - t_hist[0])
                     self.omegas[i] = np.sqrt(self.x_vels[i]**2 + self.y_vels[i]**2) / self.radii[i]
@@ -126,6 +140,7 @@ class StateMachine:
             if omega is not None:
                 total += omega
                 count += 1
+        self.box_lock.release()
         if not count == 0:
             self.omega = total / count
         else:
@@ -137,10 +152,13 @@ class StateMachine:
         #        maxvel = max(maxvel, np.sqrt(x_vel**2 + y_vel**2))
         #if maxvel > VELOCITY_THRESHOLD:
         if self.omega > OMEGA_THRESHOLD:
+            self.old_stop_time = self.start_time
             self.stop_time = time.time()
+            self.moving = True
             print(f'Time since started = {self.stop_time - self.start_time} s')
         else:
             self.start_time = time.time()
+            self.moving = False
             print(f'Time since stopped = {self.start_time - self.stop_time} s')
         if len(self.ids) > 0:
             self.camera_stale = False
@@ -149,6 +167,7 @@ class StateMachine:
         '''
         Updates the self.detected_colour variable with the received response.
         '''
+        print(f'colour callback')
         self.detected_colour = data
 
     def request_colour(self) -> ColorRGBA:
@@ -160,27 +179,35 @@ class StateMachine:
         request = Bool(); request.data = True
         self.colour_pub.publish(request)
 
-        while not self.detected_colour:
+        while not self.detected_colour and not rospy.is_shutdown():
             time.sleep(0.01)
         return self.detected_colour
 
     def position_error_callback(self, msg):
         # TODO - track change in position error to see if robot is still moving
+        # print(f'pos error callback = {msg.data}')
         self.position_error = msg.data
 
-    def desired_pos_publisher(self, coords, pitch=None):
+    def desired_pos_publisher(self, coords, pitch=None, rad_offset=0):
         '''
         Accept coords and optional pitch
         Return if command was issued
         if pitch is not supplied, try as straight down as possible
         '''
+        self.position_error = ERROR_TOL*10
         pos = Pos()
         pos.x, pos.y, pos.z = coords
+        if not rad_offset == 0:
+            rad_orig = np.sqrt(pos.x**2 + pos.y**2)
+            rad_new = rad_orig + rad_offset
+            pos.x = pos.x * rad_new / rad_orig
+            pos.y = pos.y * rad_new / rad_orig
         if pitch is not None:  # if pitch supplied, try to reach it or fail
             if inv_kin(coords, pitch, self_check=False, check_possible=True):
                 pos.pitch = pitch
                 self.pos_pub.publish(pos)
                 return True
+            print(f'NOT POSSIBLE')
             return False
         else:  # Otherwise use default and increment
             for pitch in np.linspace(-np.pi/2, 0, 10):
@@ -188,6 +215,7 @@ class StateMachine:
                     pos.pitch = pitch
                     self.pos_pub.publish(pos)
                     return True
+            print(f'NOT POSSIBLE')
             return False
 
     def gripper_publisher(self, open_grip=True):
@@ -198,13 +226,29 @@ class StateMachine:
         msg.open = open_grip
         self.gripper_pub.publish(msg)
 
+    def delete_box(self, box_id):
+        self.box_lock.acquire()
+        i = self.ids.index(box_id)
+        del self.ids[i]
+        del self.xs[i]
+        del self.ys[i]
+        del self.zrots[i]
+        del self.radii[i]
+        del self.x_hist[i]
+        del self.y_hist[i]
+        del self.t_hist[i]
+        del self.x_vels[i]
+        del self.y_vels[i]
+        del self.omegas[i]
+        self.box_lock.release()
+
     def run(self):
         while not rospy.is_shutdown():
             while self.camera_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
             if rospy.is_shutdown():
                 return 0
-            self.camera_stale = True
+            #self.camera_stale = True
             self.loop()
 
     def pickup_block(self, block_id):
@@ -213,25 +257,27 @@ class StateMachine:
         y = self.ys[i]
         z = EMPTY_HEIGHT
         coords = (x, y, z)
-        self.desired_pos_publisher(coords)
-        print(self.position_error)
+        possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
+        if not possible:
+            return STATE_FIND
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-            print(self.position_error)
         z = GRABBY_HEIGHT
         coords = (x, y, z)
-        self.desired_pos_publisher(coords)
-        print(2)
-        print(self.position_error)
+        possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
+        if not possible:
+            return STATE_RESET
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-            print(2)
-            print(self.position_error)
+        time.sleep(0.2)
         self.gripper_publisher(False)
         time.sleep(GRAB_TIME)
         z = CARRY_HEIGHT
         coords = (x, y, z)
-        self.desired_pos_publisher(coords)
+        possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
+        if not possible:
+            return STATE_RESET
+        return None
 
     def loop(self):
         '''
@@ -259,25 +305,35 @@ class StateMachine:
     def state_find(self):
         # Locating and choosing which block to pick up
         # TODO: ADD LOGIC
+        while len(self.ids) == 0 and not rospy.is_shutdown():
+            time.sleep(0.01)
         self.desired_id = self.ids[0] # TEMPORARY, FIX THIS - TODO
         return STATE_GRAB
 
     def state_grab(self):
         # Picking up a block
         # If fails, open gripper and return to state_find
-        self.pickup_block(self.desired_id)
-        return STATE_COLOUR
+        if self.moving:
+            return STATE_GRAB
+        alt_state = self.pickup_block(self.desired_id)
+        if alt_state is not None:
+            return alt_state
+        return STATE_TOSS
+
+    def state_trap(self):
+        return STATE_TRAP
 
     def state_colour(self):
         # Checking the block colour
         # If fails, open gripper and return to state_find
-        print('colour')
         coords = (BASE_TO_BELT, 0, 0.2) # TODO - get position
         pitch = 0
         self.desired_pos_publisher(coords, pitch)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        print(f'Requestself.desired_idlour')
         self.request_colour()
+        print(f'Colour = {self.detected_colour}')
         return STATE_COLOUR # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
@@ -304,6 +360,31 @@ class StateMachine:
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
         return STATE_RESET
+
+    def state_toss(self):
+        coords = (L4, 0, L1+L2+L3)
+        self.desired_pos_publisher(coords, 0)
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+            time.sleep(0.01)
+
+        joint_state = JointState()
+        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+        joint_state.position = (0, 0, 0, 0)
+        joint_state.velocity = (5, 5, 5, 10)
+        self.joint_pub.publish(joint_state)
+        time.sleep(0.3)
+        self.gripper_publisher(True)
+        time.sleep(0.5)
+        joint_state = JointState()
+        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+        joint_state.position = (0, 0, 0, np.pi/2)
+        joint_state.velocity = (5, 5, 5, 10)
+        self.joint_pub.publish(joint_state)
+
+        time.sleep(1)
+        self.delete_box(self.desired_id)
+        return STATE_RESET
+        
 
     def state_error(self):
         # If called, open gripper and go to state_reset

@@ -14,7 +14,7 @@ class GripperController:
 
     # Define servo positions corresponding to gripper states
     position = {
-        False: 1375, # grip
+        False: 1315, # grip - default 1375
         True:  2000, # open
     }
 

@@ -106,6 +106,11 @@ def atan2(b, a):
     a, b = sin, cos = y, x
     '''
     # Suppress divide by zero warnings
+    if not isinstance(b, np.ndarray):
+        if b == 0:
+            if a == 0:
+                return 0
+            return np.pi/2 * a / np.abs(a)
     with np.errstate(divide='ignore'):
         theta = np.arctan(a/b)
     # Add pi if cos < 0, and saturate between -pi to pi

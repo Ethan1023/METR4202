@@ -29,7 +29,8 @@ THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 # CONTROLLER
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
 
-THETA_OFFSET = (0, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
+THETA_OFFSET = (0.05, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
+RAD_OFFSET = -0.03
 
 # Highly recommend constant gain across joints 2-4 with no offset
 CONTROLLER_GAIN = (2, 10, 10, 10)   # Gain on position error
@@ -37,7 +38,7 @@ CONTROLLER_OFFSET = (1, 0, 0, 0)    # Add this to requested velocity
 
 # POSITIONS
 # Heights for grabbing a box, when not carrying a box, and when carrying a box respectivly
-GRABBY_HEIGHT = 0.03
+GRABBY_HEIGHT = 0.02
 EMPTY_HEIGHT = 0.05
 CARRY_HEIGHT = 0.08
 
@@ -71,7 +72,9 @@ STATE_GRAB = 2
 STATE_COLOUR = 3
 STATE_PLACE = 4
 STATE_ERROR = 5
-STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error']
+STATE_TRAP = 6
+STATE_TOSS = 7
+STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss']
 
 #COLOUR BLOCK LOCATIONS TODO - CHANGE THIS!
 PLACE_DICT = {"red": (0, 0)}
