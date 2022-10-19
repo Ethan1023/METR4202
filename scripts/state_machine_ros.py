@@ -345,7 +345,7 @@ class StateMachine:
         # print(f'Requestself.desired_idlour')
         # self.request_colour()
         # print(f'Colour = {self.detected_colour}')
-        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
+        return STATE_RESET # TEMPORARY, FIX THIS - TODO
 
     def state_place(self):
         # Get destination from state_colour
@@ -354,16 +354,18 @@ class StateMachine:
         # Once position error is low enough, put block down then return to state_reset
         # TODO - create dictionary of tuples within constants file for colours which returns xy
         # TODO - get z values
-        self.detected_colour = "red"
-        x, y = PLACE_DICT[self.detected_colour]
-        z = CARRY_HEIGHT
+        #self.detected_colour = "red"
+        #x, y = PLACE_DICT[self.detected_colour]
+        x = -0.15
+        y = 0.05
+        z = 0.2 #TODO fix#
         coords = (x, y, z)
         self.desired_pos_publisher(coords)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         z = H_BLOCK
         coords = (x, y, z)
-        self.desired_pos_publisher(coords)
+        self.desired_pos_publisher(coords, -np.pi/2)
         while self.position_error > ERROR_TOL:
             time.sleep(0.01)
         self.gripper_publisher(True)
