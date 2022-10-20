@@ -4,6 +4,7 @@
 TODO: documentation
 '''
 
+import math
 import time
 
 from threading import Lock
@@ -26,6 +27,14 @@ from maths import yaw_from_quat
 from constants import *
 
 
+class Box:
+    def __init__(self, x, y, zrot, radius) -> None:
+        self.x = None
+        self.y = None
+        self.zrot = None
+        self.radius
+
+
 class StateMachine:
     def __init__(self, dorospy: bool = True) -> None:
         self.other_init()
@@ -41,18 +50,17 @@ class StateMachine:
         self.position_error = ERROR_TOL*10
         # Assume joint controller runs faster than camera so no real need to track is position error is stale
         # TODO - camera input variables
-        self.ids = []
-        self.xs = []
-        self.ys = []
-        self.zrots = []
+
+        self.boxes = {}
 
         self.x_hist = []  # List of lists of position history
         self.y_hist = []
         self.t_hist = []  # List of lists of update times
+
         self.x_vels = []  # List of velocities
         self.y_vels = []
+        
         self.omegas = []  # list of angular velocities
-        self.radii = []  # list of radii
         self.omega = 0    # average angular velocity (0 if not known)
         self.start_time = time.time()   # update while any blocks are not moving
         self.stop_time = time.time()    # update while any blocks are moving
@@ -89,35 +97,51 @@ class StateMachine:
             # Block operation until camera data received
             time.sleep(0.01)
 
-    def camera_callback(self, msg):
+    def camera_callback(self, box_transforms: BoxTransformArray) -> None:
+        '''
+        TODO: documentation
+        '''
+        # Acquire lock on boxes so they are not accessed while being updated
         self.box_lock.acquire()
-        for box_transform in msg.transforms:
+
+        # Add new boxes or update existing ones from camera data
+        for box_transform in box_transforms.transforms:
             box_id = box_transform.fiducial_id
-            if box_id in self.ids:
-                i = self.ids.index(box_id)
-                self.xs[i] = box_transform.transform.translation.x
-                self.ys[i] = box_transform.transform.translation.y
-                self.zrots[i] = yaw_from_quat(box_transform.transform.rotation)
-                self.radii[i] = np.sqrt((self.xs[i]-BASE_TO_BELT)**2 + self.ys[i]**2)
-                # Update position 'queue'
-                self.x_hist[i].append(self.xs[i])
-                self.y_hist[i].append(self.ys[i])
+
+            # Update existing boxes
+            if box_id in self.blocks:
+
+                box = self.boxes[box_id]
+                box.x = box_transform.transform.translation.x
+                box.y = box_transform.transform.translation.y
+                box.zrot = yaw_from_quat(box_transform.transform.rotation)
+                box.radius = np.sqrt((box.x - BASE_TO_BELT)**2 + box.y**2)
+
+                self.x_hist[i].append(box.x)
+                self.y_hist[i].append(box.y)
                 self.t_hist[i].append(time.time())
+
+            # Add new boxes
             else:
                 print(f'New box found!')
-                self.ids.append(box_id)
-                self.xs.append(box_transform.transform.translation.x)
-                self.ys.append(box_transform.transform.translation.y)
-                self.zrots.append(yaw_from_quat(box_transform.transform.rotation))
-                self.radii.append(np.sqrt((self.xs[-1]-BASE_TO_BELT)**2 + self.ys[-1]**2))
+
+                x = box_transform.transform.translation.x
+                y = box_transform.transform.translation.y
+                zrot = yaw_from_quat(box_transform.transform.rotation)
+                radius = np.sqrt((x - BASE_TO_BELT)**2 + y**2)
+
+                self.boxes[box_id] = Box(x, y, zrot, radius)
+
                 # Create 'queue' with new position
-                self.x_hist.append([self.xs[-1]])
-                self.y_hist.append([self.ys[-1]])
+                self.x_hist.append([x])
+                self.y_hist.append([y])
                 self.t_hist.append([time.time()])
+
                 # Velocity is unknown
                 self.x_vels.append(None)
                 self.y_vels.append(None)
                 self.omegas.append(None)
+
         # If oldest history >X seconds old, delete (FIFO queue)
         # Calculate velocity with oldest pos <X sec old and most recent val
         for i, (t_hist, x_hist, y_hist) in enumerate(zip(self.t_hist, self.x_hist, self.y_hist)):
@@ -166,7 +190,7 @@ class StateMachine:
             self.start_time = time.time()
             self.moving = False
             print(f'Time since stopped = {self.start_time - self.stop_time} s')
-        if len(self.ids) > 0:
+        if len(self.boxes) > 0:
             self.camera_stale = False
 
     def colour_detect_callback(self, data: ColorRGBA) -> None:
@@ -236,17 +260,7 @@ class StateMachine:
     def delete_box(self, box_id):
         self.box_lock.acquire()
         i = self.ids.index(box_id)
-        del self.ids[i]
-        del self.xs[i]
-        del self.ys[i]
-        del self.zrots[i]
-        del self.radii[i]
-        del self.x_hist[i]
-        del self.y_hist[i]
-        del self.t_hist[i]
-        del self.x_vels[i]
-        del self.y_vels[i]
-        del self.omegas[i]
+        del self.boxes[box_id]
         self.box_lock.release()
 
     def run(self):
@@ -266,32 +280,21 @@ class StateMachine:
         else:
             self.grab_moving = True
         print(f"Belt moving = {self.grab_moving}")
-
-    def still_grab(self, xs, ys, ids):
-        for x, y in zip(self.xs, self.ys):
-            # index of the coordinates which will be used to determine 
-            # the desired block id
-            i = self.xs.index(x)
-            block_rad = np.hypot(x, y)
-            #check if block can be grabbed vertically
-            if block_rad < GRAB_RANGE:
-                return self.ids[i]
-            else:
-                return self.ids[i]
     
-    def grab_min_rad(xs, ys, ids):
+    def grab_closest(self):
         '''
-        args: list of x and y coordinates of the blocks
         returns: id of block with smallest radius (block to be grabbed first)
         '''
-        block_radii = []
-        for x, y in zip(xs, ys):
-            # index of the coordinates which will be used to determine 
-            # the desired block id
-            i = xs.index(x)
-            block_rad = np.hypot(x, y)
-            block_radii.append(block_rad)
-        return ids[block_radii.index(min(block_radii))]
+        closest_id = None; min_distance = math.inf
+
+        for box_id in self.boxes:
+            box = self.boxes[box_id]
+            dist = np.hypot(box.x, box.y)
+            if dist < min_distance:
+                closest_id = box_id
+                min_distance = dist
+
+        return closest_id
 
     def pickup_block(self, block_id):
         i = self.ids.index(block_id)
@@ -357,7 +360,7 @@ class StateMachine:
         while len(self.ids) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
         #self.moving_grab_update()
-        self.desired_id = self.grab_min_rad(self.xs, self.ys, self.ids) # TEMPORARY, FIX THIS - TODO
+        self.desired_id = self.grab_closest()
         return STATE_GRAB
 
     def state_grab(self):
