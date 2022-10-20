@@ -3,6 +3,8 @@ Rules for state machine - figured I might put some here based on assumptions mad
 Never go directly from below belt on left side to right side or vise versa
 '''
 
+import numpy as np
+
 # GEOMETRY
 L1 = 0.101
 L2 = 0.2165-L1
@@ -101,6 +103,9 @@ DROPOFF_POSITION = {
 
 
 # Other?
-VELOCITY_AVG_TIME = 0.5  # How long across to average time
+rpm2rad = lambda w: w * np.pi / 30
+
+VELOCITY_AVG_TIME = 0.5  # uses timestamps this many seconds apart to calculate velocity
 #VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
-OMEGA_THRESHOLD = 3 * 3.1415 / 30  # How fast counts as moving - tradeoff between how slow counts as moving and sensor noise
+OMEGA_THRESHOLD = rpm2rad(2) # [rad/s], how fast counts as moving - tradeoff between how slow counts as moving and sensor noise
+TASK3B_THRESHOLD = 1.5 # If the belt stops for less than this time, we are in task 3b
