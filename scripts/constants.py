@@ -79,6 +79,9 @@ STATE_TRAP = 6
 STATE_TOSS = 7
 STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss']
 
+# ROBOT POSITIONS
+POSITION_IDLE = (L4, 0, L1 + L2 + L3)
+
 # BLOCK DROPOFF ZONES
 DROPOFF_ZONE = {
     1: (-0.05,  0.15, 0),

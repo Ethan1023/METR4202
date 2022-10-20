@@ -27,7 +27,7 @@ def block_radius(x, y):
     '''
     block_radii = []
 
-    for i in range(len(x))
+    for i in range(len(x)):
         rad = np.hypot((x[i]-X_CENTRE),(y[i]-Y_CENTRE))
         block_radii.append(rad)
     return block_radii

@@ -16,18 +16,13 @@ from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 
 from inverse_kinematics import inv_kin
-from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
-                      STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
-                      STATE_TOSS, \
-                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-                      RAD_OFFSET, H_BLOCK
-from maths import yaw_from_quat
-
 # from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
 #                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
 #                       STATE_TOSS, \
-#                       L1, L2, L3, L4, DROPOFF_POSITION, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
+#                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
 #                       RAD_OFFSET, H_BLOCK
+from maths import yaw_from_quat
+
 from constants import *
 
 
@@ -303,7 +298,7 @@ class StateMachine:
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         time.sleep(0.2)
-        self.command_gripper(False)
+        self.command_gripper(open_gripper=False)
         time.sleep(GRAB_TIME)
         z = CARRY_HEIGHT
         coords = (x, y, z)
@@ -332,17 +327,14 @@ class StateMachine:
         end effector to reach the desired position.
         '''
         self.desired_pos_publisher(coords, pitch, rad_offset)
-        while self.position_error > ERROR_TOL:
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         time.sleep(0.1)
 
     def state_reset(self):
-        # Returns robot to initial position and opens gripper
-        self.command_gripper()
-        coords = (L4, 0, L1+L2+L3)
-        self.desired_pos_publisher(coords, 0)
-        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
-            time.sleep(0.01)
+        '''Moves the robot into the idle position with the gripper open.'''
+        self.command_gripper(open_gripper=True)
+        self.move_to(POSITION_IDLE, 0)
         return STATE_FIND
 
     def state_find(self):
@@ -398,8 +390,14 @@ class StateMachine:
         coords = (coords[0], coords[1], DROPOFF_HEIGHT)
         self.move_to(coords, pitch=-np.pi/2)
 
-        # Release the block and send the arm back into RESET state
+        # Release the block
         self.command_gripper(open_gripper=True)
+
+        # Move the arm back up so it can return to reset position
+        coords = (coords[0], coords[1], CARRY_HEIGHT)
+        self.move_to(coords, pitch=-np.pi/2)
+
+        # Return to reset state
         return STATE_RESET
 
     def state_toss(self):
@@ -428,7 +426,7 @@ class StateMachine:
 
     def state_error(self):
         # If called, open gripper and go to state_reset
-        self.command_gripper()
+        self.command_gripper(open_gripper=True)
         return STATE_RESET
 
     def state_trap(self):
