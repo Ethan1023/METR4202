@@ -17,7 +17,7 @@ from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB
                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
                       STATE_TOSS, \
                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-                      RAD_OFFSET, H_BLOCK
+                      RAD_OFFSET, H_BLOCK, GRAB_RANGE
 from maths import yaw_from_quat
 from threading import Lock
 
@@ -261,6 +261,18 @@ class StateMachine:
             self.grab_moving = True
         print(f"Belt moving = {self.grab_moving}")
 
+    def still_grab(self, xs, ys, ids):
+        for x, y in zip(self.xs, self.ys):
+            # index of the coordinates which will be used to determine 
+            # the desired block id
+            i = self.xs.index(x)
+            block_rad = np.hypot(x, y)
+            #check if block can be grabbed vertically
+            if block_rad < GRAB_RANGE:
+                return self.ids[i]
+            else:
+                return self.ids[i]
+
     def pickup_block(self, block_id):
         i = self.ids.index(block_id)
         x = self.xs[i]
@@ -326,7 +338,7 @@ class StateMachine:
         # If fails, open gripper and return to state_find
         if self.moving:
             return STATE_GRAB
-        alt_state = self.pickup_block(self.desired_id)
+        alt_state = self.pickup_block(self.still_grab(self.xs, self.ys, self.ids))
         if alt_state is not None:
             return alt_state
         return STATE_COLOUR
