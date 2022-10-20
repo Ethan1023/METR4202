@@ -30,7 +30,7 @@ THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 # CONTROLLER
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
 
-THETA_OFFSET = (0.05, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
+THETA_OFFSET = (0.02, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
 RAD_OFFSET = -0.03
 
 # Highly recommend constant gain across joints 2-4 with no offset
@@ -39,11 +39,11 @@ CONTROLLER_OFFSET = (1, 0, 0, 0)    # Add this to requested velocity
 
 # POSITIONS
 # Heights for grabbing a box, when not carrying a box, and when carrying a box respectivly
-COLOUR_DETECT_HEIGHT = 0.2
+COLOUR_DETECT_HEIGHT = 0.25
 GRABBY_HEIGHT = 0.02
 EMPTY_HEIGHT = 0.05
 CARRY_HEIGHT = 0.08
-DROPOFF_HEIGHT = -0.03
+DROPOFF_HEIGHT = -0.01
 
 #TEST EQUIPMENT DIMENSIONS
 H_BLOCK = 0.032
@@ -81,12 +81,14 @@ STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'tos
 
 # ROBOT POSITIONS
 POSITION_IDLE = (L4, 0, L1 + L2 + L3)
+POSITION_COLOUR_DETECT = (BASE_TO_BELT + 0.01, 0, COLOUR_DETECT_HEIGHT)
+POSITION_INTERMEDIATE = (0.1, 0, 0.12)
 
 # BLOCK DROPOFF ZONES
 DROPOFF_ZONE = {
     1: (-0.05,  0.15),
-    2: (-0.15,  0.05),
-    3: (-0.15, -0.05),
+    2: (-0.15,  0.10),
+    3: (-0.15, -0.10),
     4: (-0.05, -0.15),
 }
 

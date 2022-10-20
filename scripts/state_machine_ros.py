@@ -340,12 +340,18 @@ class StateMachine:
         self.desired_pos_publisher(coords, pitch, rad_offset)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-        time.sleep(0.1)
+        time.sleep(0.5)
 
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
         self.command_gripper(open_gripper=True)
-        self.move_to(POSITION_IDLE, pitch=0)
+        # self.move_to(POSITION_IDLE, pitch=0)
+        joint_state = JointState()
+        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+        joint_state.position = (0, 0, 0, np.pi/2)
+        joint_state.velocity = (3, 3, 3, 6)
+        self.joint_pub.publish(joint_state)
+        time.sleep(0.5)
         return STATE_FIND
 
     def state_find(self):
@@ -358,13 +364,19 @@ class StateMachine:
         return STATE_GRAB
 
     def state_grab(self):
-        # Picking up a block
-        # If fails, open gripper and return to state_find
-        # if self.moving:
-        #     return STATE_GRAB
+        '''
+        Pick up the block with the ID chosen during the previous state.
+        '''
         alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
             return alt_state
+
+        # Move the block to an intermediate position closer to the base to
+        # avoid hitting other block when moving towards the 
+        self.move_to(POSITION_INTERMEDIATE, pitch=-np.pi/2)
+
+        # Advance to the next state
+
         return STATE_COLOUR
 
     def state_colour(self):
@@ -373,11 +385,8 @@ class StateMachine:
         '''
         # Checking the block colour
         # If fails, open gripper and return to state_find
-        coords = (BASE_TO_BELT, 0, COLOUR_DETECT_HEIGHT)
-        pitch = 0
-        self.desired_pos_publisher(coords, pitch)
-        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
-            time.sleep(0.01)
+        coords = POSITION_COLOUR_DETECT
+        self.move_to(coords, pitch=0)
 
         detected_colour = self.request_colour()
 
@@ -410,16 +419,9 @@ class StateMachine:
         # Release the block
         self.command_gripper(open_gripper=True)
 
-        # # Move the arm back up so it can return to reset position
+        # # Move the arm back up slightly before returning to reset position
         # coords = (coords[0], coords[1], CARRY_HEIGHT)
         # self.move_to(coords, pitch=-np.pi/2)
-
-        joint_state = JointState()
-        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        joint_state.position = (0, 0, 0, np.pi/2)
-        joint_state.velocity = (3, 3, 3, 6)
-        self.joint_pub.publish(joint_state)
-        time.sleep(1)
 
         # Delete the box from tracked boxes
         self.delete_box(self.desired_id)
