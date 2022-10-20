@@ -4,25 +4,35 @@
 TODO: documentation
 '''
 
-import rospy
 import time
+
+from threading import Lock
+
 import numpy as np
+import rospy
 
 from std_msgs.msg import Bool, ColorRGBA, Float32
 from sensor_msgs.msg import JointState
-#ColorRGBA = None
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
+
 from inverse_kinematics import inv_kin
 from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
                       STATE_TOSS, \
                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-                      RAD_OFFSET, H_BLOCK, GRAB_RANGE
+                      RAD_OFFSET, H_BLOCK
 from maths import yaw_from_quat
-from threading import Lock
+
+# from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
+#                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
+#                       STATE_TOSS, \
+#                       L1, L2, L3, L4, DROPOFF_POSITION, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
+#                       RAD_OFFSET, H_BLOCK
+from constants import *
+
 
 class StateMachine:
-    def __init__(self, dorospy = True):
+    def __init__(self, dorospy: bool = True) -> None:
         self.other_init()
         if dorospy:
             self.rospy_init()
@@ -219,13 +229,14 @@ class StateMachine:
             print(f'NOT POSSIBLE')
             return False
 
-    def gripper_publisher(self, open_grip=True):
+    def command_gripper(self, open_gripper: bool = True) -> None:
         '''
-        Open gripper?
+        Publishes a command to the open or grip the gripper. Blocks for a
+        period defined by "GRAB_TIME".
         '''
-        msg = GripperState()
-        msg.open = open_grip
+        msg = GripperState(); msg.open = open_gripper
         self.gripper_pub.publish(msg)
+        time.sleep(GRAB_TIME)
 
     def delete_box(self, box_id):
         self.box_lock.acquire()
@@ -292,7 +303,7 @@ class StateMachine:
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         time.sleep(0.2)
-        self.gripper_publisher(False)
+        self.command_gripper(False)
         time.sleep(GRAB_TIME)
         z = CARRY_HEIGHT
         coords = (x, y, z)
@@ -315,9 +326,19 @@ class StateMachine:
         # self.pickup_block(0)
         # publsh commands if needed
 
+    def move_to(self, coords, pitch: float, rad_offset: int = 0) -> bool:
+        '''
+        A wrapper around desired_pos_publisher that handles waiting for the
+        end effector to reach the desired position.
+        '''
+        self.desired_pos_publisher(coords, pitch, rad_offset)
+        while self.position_error > ERROR_TOL:
+            time.sleep(0.01)
+        time.sleep(0.1)
+
     def state_reset(self):
         # Returns robot to initial position and opens gripper
-        self.gripper_publisher()
+        self.command_gripper()
         coords = (L4, 0, L1+L2+L3)
         self.desired_pos_publisher(coords, 0)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
@@ -343,13 +364,13 @@ class StateMachine:
             return alt_state
         return STATE_COLOUR
 
-    def state_trap(self):
-        return STATE_TRAP
-
     def state_colour(self):
+        '''
+        TODO: documentation
+        '''
         # Checking the block colour
         # If fails, open gripper and return to state_find
-        coords = (BASE_TO_BELT, 0, 0.2) # TODO - get position
+        coords = (BASE_TO_BELT, 0, COLOUR_DETECT_HEIGHT)
         pitch = 0
         self.desired_pos_publisher(coords, pitch)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
@@ -357,35 +378,28 @@ class StateMachine:
         # print(f'Requestself.desired_idlour')
         # self.request_colour()
         # print(f'Colour = {self.detected_colour}')
-        return STATE_PLACE # TEMPORARY, FIX THIS - TODO
+        return STATE_PLACE
 
-    def state_place(self):
-        # Get destination from state_colour
-        # Checking id list until the block arrives at that destination
-        # If block appears back in the id/pos list, go to state_find
-        # Once position error is low enough, put block down then return to state_reset
-        # TODO - create dictionary of tuples within constants file for colours which returns xy
-        # TODO - get z values
-        #self.detected_colour = "red"
-        #x, y = PLACE_DICT[self.detected_colour]
-        coords = (-0.1, 0.1, 0.2)
-        self.desired_pos_publisher(coords, 0)
-        print("Up")
-        while self.position_error > ERROR_TOL:
-            time.sleep(0.01)
-        #self.gripper_publisher()
-        coords = (-0.1, 0.1, 0.2)
-        self.desired_pos_publisher(coords, -np.pi/2)
-        print("Placed")
-        while self.position_error > ERROR_TOL:
-            time.sleep(0.01)
-        self.gripper_publisher()
-        time.sleep(GRAB_TIME)
-        coords = (-0.1, 0.1, GRABBY_HEIGHT)
-        self.desired_pos_publisher(coords)
-        print("Back up")
-        while self.position_error > ERROR_TOL:
-            time.sleep(0.01)
+    def state_place(self) -> None:
+        '''
+        Move the end effector from the colour detection pose to the drop-off
+        zone corresponding to the desired colour.
+        '''
+        # Get the x, y coords of the desired drop-off zone
+        # dropoff_position = DROPOFF_POSITION[self.detected_colour]
+        coords = DROPOFF_POSITION['red'] # TODO: un-hardcode this
+
+        # To avoid collision, from the colour detection pose first rotate the
+        # base to the x, y coordinate of the desired drop-off zone
+        coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT) # TODO: un-hardcode the x, y
+        self.move_to(coords, pitch=0)
+
+        # Move end-effector directly down to place the block
+        coords = (coords[0], coords[1], DROPOFF_HEIGHT)
+        self.move_to(coords, pitch=-np.pi/2)
+
+        # Release the block and send the arm back into RESET state
+        self.command_gripper(open_gripper=True)
         return STATE_RESET
 
     def state_toss(self):
@@ -400,7 +414,7 @@ class StateMachine:
         joint_state.velocity = (5, 5, 5, 10)
         self.joint_pub.publish(joint_state)
         time.sleep(0.3)
-        self.gripper_publisher(True)
+        self.command_gripper(open_gripper=True)
         time.sleep(0.5)
         joint_state = JointState()
         joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
@@ -411,12 +425,15 @@ class StateMachine:
         time.sleep(1)
         self.delete_box(self.desired_id)
         return STATE_RESET
-        
 
     def state_error(self):
         # If called, open gripper and go to state_reset
-        self.gripper_publisher()
+        self.command_gripper()
         return STATE_RESET
+
+    def state_trap(self):
+        return STATE_TRAP
+
 
 if __name__ == '__main__':
     # Create ROS node
