@@ -12,7 +12,7 @@ from threading import Lock
 import numpy as np
 import rospy
 
-from std_msgs.msg import Bool, ColorRGBA, Float32
+from std_msgs.msg import Bool, Float32, String
 from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
 
@@ -29,10 +29,10 @@ from constants import *
 
 class Box:
     def __init__(self, x, y, zrot, radius) -> None:
-        self.x = None
-        self.y = None
-        self.zrot = None
-        self.radius
+        self.x = x
+        self.y = y
+        self.zrot = zrot
+        self.radius = radius
 
 
 class StateMachine:
@@ -91,7 +91,7 @@ class StateMachine:
         # Subscribe to angle error - TODO
         rospy.Subscriber('position_error', Float32, self.position_error_callback)
         # Subscribe to colour detection
-        rospy.Subscriber('box_colour', ColorRGBA, self.colour_detect_callback)
+        rospy.Subscriber('box_colour', String, self.colour_detect_callback)
 
         while self.camera_stale and not rospy.is_shutdown():
             # Block operation until camera data received
@@ -109,7 +109,7 @@ class StateMachine:
             box_id = box_transform.fiducial_id
 
             # Update existing boxes
-            if box_id in self.blocks:
+            if box_id in self.boxes:
 
                 box = self.boxes[box_id]
                 box.x = box_transform.transform.translation.x
@@ -117,9 +117,9 @@ class StateMachine:
                 box.zrot = yaw_from_quat(box_transform.transform.rotation)
                 box.radius = np.sqrt((box.x - BASE_TO_BELT)**2 + box.y**2)
 
-                self.x_hist[i].append(box.x)
-                self.y_hist[i].append(box.y)
-                self.t_hist[i].append(time.time())
+                # self.x_hist[i].append(box.x)
+                # self.y_hist[i].append(box.y)
+                # self.t_hist[i].append(time.time())
 
             # Add new boxes
             else:
@@ -132,75 +132,76 @@ class StateMachine:
 
                 self.boxes[box_id] = Box(x, y, zrot, radius)
 
-                # Create 'queue' with new position
-                self.x_hist.append([x])
-                self.y_hist.append([y])
-                self.t_hist.append([time.time()])
+        #         # Create 'queue' with new position
+        #         self.x_hist.append([x])
+        #         self.y_hist.append([y])
+        #         self.t_hist.append([time.time()])
 
-                # Velocity is unknown
-                self.x_vels.append(None)
-                self.y_vels.append(None)
-                self.omegas.append(None)
+        #         # Velocity is unknown
+        #         self.x_vels.append(None)
+        #         self.y_vels.append(None)
+        #         self.omegas.append(None)
 
-        # If oldest history >X seconds old, delete (FIFO queue)
-        # Calculate velocity with oldest pos <X sec old and most recent val
-        for i, (t_hist, x_hist, y_hist) in enumerate(zip(self.t_hist, self.x_hist, self.y_hist)):
-            if len(t_hist) > 1:
-                if t_hist[-1] - t_hist[0] > VELOCITY_AVG_TIME:  # if oldest value is old enough
-                    # While second oldest value is old enough, clear oldest
-                    while len(t_hist) > 2 and t_hist[-1] - t_hist[1] > VELOCITY_AVG_TIME:
-                        del x_hist[0]
-                        del y_hist[0]
-                        del t_hist[0]
-                    # Calculate velocities
-                    print(f'{self.x_vels[i]}')
-                    print(f'={self.xs[i]}')
-                    print(f'- {t_hist}')
-                    self.x_vels[i] = (self.xs[i] - x_hist[0]) / (t_hist[-1] - t_hist[0])
-                    self.y_vels[i] = (self.ys[i] - y_hist[0]) / (t_hist[-1] - t_hist[0])
-                    self.omegas[i] = np.sqrt(self.x_vels[i]**2 + self.y_vels[i]**2) / self.radii[i]
-            else:
-                # Set to none if can't track? TODO
-                self.x_vels[i] = None
-                self.y_vels[i] = None
-                self.omegas[i] = None
-        total = 0
-        count = 0
-        for omega in self.omegas:
-            if omega is not None:
-                total += omega
-                count += 1
+        # # If oldest history >X seconds old, delete (FIFO queue)
+        # # Calculate velocity with oldest pos <X sec old and most recent val
+        # for i, (t_hist, x_hist, y_hist) in enumerate(zip(self.t_hist, self.x_hist, self.y_hist)):
+        #     if len(t_hist) > 1:
+        #         if t_hist[-1] - t_hist[0] > VELOCITY_AVG_TIME:  # if oldest value is old enough
+        #             # While second oldest value is old enough, clear oldest
+        #             while len(t_hist) > 2 and t_hist[-1] - t_hist[1] > VELOCITY_AVG_TIME:
+        #                 del x_hist[0]
+        #                 del y_hist[0]
+        #                 del t_hist[0]
+        #             # Calculate velocities
+        #             print(f'{self.x_vels[i]}')
+        #             print(f'={self.xs[i]}')
+        #             print(f'- {t_hist}')
+        #             self.x_vels[i] = (self.xs[i] - x_hist[0]) / (t_hist[-1] - t_hist[0])
+        #             self.y_vels[i] = (self.ys[i] - y_hist[0]) / (t_hist[-1] - t_hist[0])
+        #             self.omegas[i] = np.sqrt(self.x_vels[i]**2 + self.y_vels[i]**2) / self.radii[i]
+        #     else:
+        #         # Set to none if can't track? TODO
+        #         self.x_vels[i] = None
+        #         self.y_vels[i] = None
+        #         self.omegas[i] = None
+        # total = 0
+        # count = 0
+        # for omega in self.omegas:
+        #     if omega is not None:
+        #         total += omega
+        #         count += 1
         self.box_lock.release()
-        if not count == 0:
-            self.omega = total / count
-        else:
-            self.omega = 0
-        # Update timers
-        #maxvel = -1
-        #for x_vel, y_vel in zip(self.x_vels, self.y_vels):
-        #    if x_vel is not None:
-        #        maxvel = max(maxvel, np.sqrt(x_vel**2 + y_vel**2))
-        #if maxvel > VELOCITY_THRESHOLD:
-        if self.omega > OMEGA_THRESHOLD:
-            self.old_stop_time = self.start_time
-            self.stop_time = time.time()
-            self.moving = True
-            print(f'Time since started = {self.stop_time - self.start_time} s')
-        else:
-            self.start_time = time.time()
-            self.moving = False
-            print(f'Time since stopped = {self.start_time - self.stop_time} s')
+        # if not count == 0:
+        #     self.omega = total / count
+        # else:
+        #     self.omega = 0
+        # # Update timers
+        # #maxvel = -1
+        # #for x_vel, y_vel in zip(self.x_vels, self.y_vels):
+        # #    if x_vel is not None:
+        # #        maxvel = max(maxvel, np.sqrt(x_vel**2 + y_vel**2))
+        # #if maxvel > VELOCITY_THRESHOLD:
+        # if self.omega > OMEGA_THRESHOLD:
+        #     self.old_stop_time = self.start_time
+        #     self.stop_time = time.time()
+        #     self.moving = True
+        #     print(f'Time since started = {self.stop_time - self.start_time} s')
+        # else:
+        #     self.start_time = time.time()
+        #     self.moving = False
+        #     print(f'Time since stopped = {self.start_time - self.stop_time} s')
+
+        # Update "stale" status of camera
         if len(self.boxes) > 0:
             self.camera_stale = False
 
-    def colour_detect_callback(self, data: ColorRGBA) -> None:
+    def colour_detect_callback(self, colour: String) -> None:
         '''
         Updates the self.detected_colour variable with the received response.
         '''
-        print(f'colour callback')
-        self.detected_colour = data
+        self.detected_colour = colour.data
 
-    def request_colour(self) -> ColorRGBA:
+    def request_colour(self) -> String:
         '''
         Publishes a request to the "colour_request" topic and subscribes to the
         "box_colour" topic to receive the response. Returns ColorRGBA.
@@ -259,7 +260,6 @@ class StateMachine:
 
     def delete_box(self, box_id):
         self.box_lock.acquire()
-        i = self.ids.index(box_id)
         del self.boxes[box_id]
         self.box_lock.release()
 
@@ -289,17 +289,16 @@ class StateMachine:
 
         for box_id in self.boxes:
             box = self.boxes[box_id]
-            dist = np.hypot(box.x, box.y)
+            dist = np.sqrt(box.x**2 + box.y**2)
             if dist < min_distance:
                 closest_id = box_id
                 min_distance = dist
 
         return closest_id
 
-    def pickup_block(self, block_id):
-        i = self.ids.index(block_id)
-        x = self.xs[i]
-        y = self.ys[i]
+    def pickup_block(self, box_id):
+        x = self.boxes[box_id].x
+        y = self.boxes[box_id].y
         z = EMPTY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
@@ -330,13 +329,8 @@ class StateMachine:
         read current state
         use block position and/or position error to change state or issue command to gripper or joint_controller
         '''
-        # do logic
-        # if len(self.ids) == 1:
-        #     state_1(self.xs[0], self.ys[0])
         print(f"State = {STATE_NAMES[self.state]}")
         self.state = self.state_funcs[self.state]()
-        # self.pickup_block(0)
-        # publsh commands if needed
 
     def move_to(self, coords, pitch: float, rad_offset: int = 0) -> bool:
         '''
@@ -351,13 +345,13 @@ class StateMachine:
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
         self.command_gripper(open_gripper=True)
-        self.move_to(POSITION_IDLE, 0)
+        self.move_to(POSITION_IDLE, pitch=0)
         return STATE_FIND
 
     def state_find(self):
         # Locating and choosing which block to pick up
         # TODO: ADD LOGIC
-        while len(self.ids) == 0 and not rospy.is_shutdown():
+        while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
         #self.moving_grab_update()
         self.desired_id = self.grab_closest()
@@ -366,8 +360,8 @@ class StateMachine:
     def state_grab(self):
         # Picking up a block
         # If fails, open gripper and return to state_find
-        if self.moving:
-            return STATE_GRAB
+        # if self.moving:
+        #     return STATE_GRAB
         alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
             return alt_state
@@ -384,9 +378,12 @@ class StateMachine:
         self.desired_pos_publisher(coords, pitch)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-        # print(f'Requestself.desired_idlour')
-        # self.request_colour()
-        # print(f'Colour = {self.detected_colour}')
+
+        detected_colour = self.request_colour()
+
+        if detected_colour == 'other':
+            return STATE_RESET
+
         return STATE_PLACE
 
     def state_place(self) -> None:
@@ -395,12 +392,15 @@ class StateMachine:
         zone corresponding to the desired colour.
         '''
         # Get the x, y coords of the desired drop-off zone
-        # dropoff_position = DROPOFF_POSITION[self.detected_colour]
-        coords = DROPOFF_POSITION['red'] # TODO: un-hardcode this
+        coords = DROPOFF_POSITION[self.detected_colour]
+        # coords = DROPOFF_POSITION['green'] # TODO: un-hardcode this
 
         # To avoid collision, from the colour detection pose first rotate the
         # base to the x, y coordinate of the desired drop-off zone
-        coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT) # TODO: un-hardcode the x, y
+        p = np.array(coords)
+        x, y = np.linalg.norm([0.1, 0.1]) / np.linalg.norm(p) * p
+        coords = (x, y, COLOUR_DETECT_HEIGHT)
+        # coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT)
         self.move_to(coords, pitch=0)
 
         # Move end-effector directly down to place the block
@@ -410,9 +410,19 @@ class StateMachine:
         # Release the block
         self.command_gripper(open_gripper=True)
 
-        # Move the arm back up so it can return to reset position
-        coords = (coords[0], coords[1], CARRY_HEIGHT)
-        self.move_to(coords, pitch=-np.pi/2)
+        # # Move the arm back up so it can return to reset position
+        # coords = (coords[0], coords[1], CARRY_HEIGHT)
+        # self.move_to(coords, pitch=-np.pi/2)
+
+        joint_state = JointState()
+        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+        joint_state.position = (0, 0, 0, np.pi/2)
+        joint_state.velocity = (3, 3, 3, 6)
+        self.joint_pub.publish(joint_state)
+        time.sleep(1)
+
+        # Delete the box from tracked boxes
+        self.delete_box(self.desired_id)
 
         # Return to reset state
         return STATE_RESET

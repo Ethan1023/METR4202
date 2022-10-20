@@ -64,7 +64,7 @@ class ColourDetection:
             '''
             self.detected_colour = colour
 
-        rospy.Subscriber('colour_request', Bool, response_callback)
+        rospy.Subscriber('request_colour', Bool, response_callback)
         rospy.Subscriber('test_color', ColorRGBA, update_callback)
         rospy.spin()
 
@@ -87,7 +87,7 @@ class ColourDetection:
         rospy.init_node('test_colour_detection', anonymous=False)
         rospy.Subscriber('box_colour', String, callback)
 
-        publisher = rospy.Publisher('colour_request', Bool, queue_size=1)
+        publisher = rospy.Publisher('request_colour', Bool, queue_size=1)
         request = Bool(); request.data = True
 
         requests_sent = 0
