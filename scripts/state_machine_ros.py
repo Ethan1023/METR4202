@@ -278,6 +278,20 @@ class StateMachine:
                 return self.ids[i]
             else:
                 return self.ids[i]
+    
+    def grab_min_rad(xs, ys, ids):
+        '''
+        args: list of x and y coordinates of the blocks
+        returns: id of block with smallest radius (block to be grabbed first)
+        '''
+        block_radii = []
+        for x, y in zip(xs, ys):
+            # index of the coordinates which will be used to determine 
+            # the desired block id
+            i = xs.index(x)
+            block_rad = np.hypot(x, y)
+            block_radii.append(block_rad)
+        return ids[block_radii.index(min(block_radii))]
 
     def pickup_block(self, block_id):
         i = self.ids.index(block_id)
@@ -343,7 +357,7 @@ class StateMachine:
         while len(self.ids) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
         #self.moving_grab_update()
-        self.desired_id = self.ids[0] # TEMPORARY, FIX THIS - TODO
+        self.desired_id = self.grab_min_rad(self.xs, self.ys, self.ids) # TEMPORARY, FIX THIS - TODO
         return STATE_GRAB
 
     def state_grab(self):
@@ -351,7 +365,7 @@ class StateMachine:
         # If fails, open gripper and return to state_find
         if self.moving:
             return STATE_GRAB
-        alt_state = self.pickup_block(self.still_grab(self.xs, self.ys, self.ids))
+        alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
             return alt_state
         return STATE_COLOUR
