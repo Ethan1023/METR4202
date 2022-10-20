@@ -9,6 +9,7 @@ L2 = 0.2165-L1
 L3 = 0.0945
 L4 = 0.083
 TOT_L = L1+L2+L3+L4
+GRAB_RANGE = L2 + L3
 
 # TRANSFORMATIONS
 T_CAMERA_TO_FIXED = [[0.000, 1.000,  0.000, 0.206],
@@ -38,9 +39,11 @@ CONTROLLER_OFFSET = (1, 0, 0, 0)    # Add this to requested velocity
 
 # POSITIONS
 # Heights for grabbing a box, when not carrying a box, and when carrying a box respectivly
+COLOUR_DETECT_HEIGHT = 0.2
 GRABBY_HEIGHT = 0.02
 EMPTY_HEIGHT = 0.05
 CARRY_HEIGHT = 0.08
+DROPOFF_HEIGHT = -0.03
 
 #TEST EQUIPMENT DIMENSIONS
 H_BLOCK = 0.032
@@ -76,8 +79,20 @@ STATE_TRAP = 6
 STATE_TOSS = 7
 STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss']
 
-#COLOUR BLOCK LOCATIONS TODO - CHANGE THIS!
-PLACE_DICT = {"red": (-0.15, 0.05)}
+# BLOCK DROPOFF ZONES
+DROPOFF_ZONE = {
+    1: (-0.05,  0.15, 0),
+    2: (-0.15,  0.05, 0),
+    3: (-0.15, -0.05, 0),
+    4: (-0.05, -0.15, 0),
+}
+
+DROPOFF_POSITION = {
+    'red': DROPOFF_ZONE[1],
+    'green': DROPOFF_ZONE[2],
+    'blue': DROPOFF_ZONE[3],
+    'yellow': DROPOFF_ZONE[4],
+}
 
 
 # Other?
