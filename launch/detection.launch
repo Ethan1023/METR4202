@@ -11,4 +11,8 @@
     <arg name="serial" value="31704551"/>
   </include>
 
+  <!-- Start colour detection nodes -->
+  <node pkg="ximea_color" type="example_camera.py" name="ximea_color"/>
+  <node pkg="metr4202" type="colour_detection.py" name="colour_detection"/>
+    
 </launch>
