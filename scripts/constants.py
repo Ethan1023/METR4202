@@ -33,7 +33,7 @@ THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
 
 THETA_OFFSET = (0.02, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
-RAD_OFFSET = -0.03
+RAD_OFFSET = -0.03 
 
 # Highly recommend constant gain across joints 2-4 with no offset
 CONTROLLER_GAIN = (2, 10, 10, 10)   # Gain on position error
@@ -42,7 +42,7 @@ CONTROLLER_OFFSET = (1, 0, 0, 0)    # Add this to requested velocity
 # POSITIONS
 # Heights for grabbing a box, when not carrying a box, and when carrying a box respectivly
 COLOUR_DETECT_HEIGHT = 0.25
-GRABBY_HEIGHT = 0.02
+GRABBY_HEIGHT = 0.02 
 EMPTY_HEIGHT = 0.05
 CARRY_HEIGHT = 0.08
 DROPOFF_HEIGHT = -0.01
@@ -107,5 +107,6 @@ rpm2rad = lambda w: w * np.pi / 30
 
 VELOCITY_AVG_TIME = 0.5  # uses timestamps this many seconds apart to calculate velocity
 #VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
-OMEGA_THRESHOLD = rpm2rad(2) # [rad/s], how fast counts as moving - tradeoff between how slow counts as moving and sensor noise
+OMEGA_THRESHOLD = rpm2rad(0.5) # [rad/s], how fast counts as moving - tradeoff between how slow counts as moving and sensor noise
 TASK3B_THRESHOLD = 1.5 # If the belt stops for less than this time, we are in task 3b
+ZROT_LIMIT = 30*np.pi/180 #if block is rotatted more than 30 degrees don't try and grab it

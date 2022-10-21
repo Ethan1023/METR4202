@@ -310,7 +310,7 @@ class StateMachine:
         '''
         # Get the current coordinates of the desired box
         box = self.boxes[box_id]; x = box.x; y = box.y; z = EMPTY_HEIGHT
-        
+         
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
         if not possible:
@@ -351,7 +351,7 @@ class StateMachine:
         self.desired_pos_publisher(coords, pitch, rad_offset)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-        time.sleep(0.5)
+        time.sleep(0.1)
 
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
@@ -371,11 +371,24 @@ class StateMachine:
         '''
         while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
-        
-        while self.moving and not self.grab_moving:
-            time.sleep(0.01)
 
+        while self.moving and self.grab_moving == False:
+            time.sleep(0.01)
+            
         self.desired_id = self.grab_closest()
+        # Check that angle of desired block is less than 30 degrees, 
+        # if more than 30 degrees, wait until stopped again
+        # zrot is constrained to being between 0 and 45 degrees
+        if abs(self.boxes[self.desired_id].zrot)/4 > ZROT_LIMIT:
+            while self.moving == False:
+                time.sleep(0.01)
+                # if it's stopped for more than 10s, task 3a
+                if (self.last_stopped_time - self.last_moved_time) > 10:
+                    #TODO - 3a logic
+                    return STATE_GRAB
+                # otherwise assume task 1 or 2 and wait for better orientation
+                return STATE_FIND
+
         return STATE_GRAB
 
     def state_grab(self):
