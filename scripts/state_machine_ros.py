@@ -7,11 +7,11 @@ TODO: documentation
 import math
 import time
 
-from threading import Lock
+from threading import Lock  # Prevent weird behaviour when deleting boxes
 
 import numpy as np
 import rospy
-from collections import Counter
+from collections import Counter  # Obtain mode of colours seen
 
 from std_msgs.msg import Bool, Float32, String
 from sensor_msgs.msg import JointState
@@ -23,7 +23,7 @@ from inverse_kinematics import inv_kin
 #                       STATE_TOSS, \
 #                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
 #                       RAD_OFFSET, H_BLOCK, COLOUR_CHECK_TIME, MAX_BLOCK_AGE
-from maths import yaw_from_quat
+from maths import yaw_from_quat  # Yaw angle of block
 
 from constants import *
 
@@ -87,34 +87,33 @@ class StateMachine:
     def other_init(self):
         self.box_lock = Lock()
         #self.theta_stale = True
-        self.printing = True
-        self.camera_stale = True
-        self.position_error = ERROR_TOL*10
-        # NOTE: Assume joint controller runs faster than camera so no real
-        # need to track is position error is stale
+        #self.printing = True
+        self.camera_stale = True  # Track is new camera info has been received
+        self.position_error = ERROR_TOL*10  # Initialise position error
 
-        self.boxes = {}
+        self.boxes = {}  # Dictionary of boxes currently on belt
 
-        self.x_vels = []  # List of velocities
-        self.y_vels = []
+        #self.x_vels = []  # List of velocities
+        #self.y_vels = []
         
-        self.omegas = []  # list of angular velocities
+        #self.omegas = []  # list of angular velocities
         self.omega = 0    # average angular velocity (0 if not known)
         self.last_stopped_time = time.time()   # update while any blocks are not moving
         self.last_moved_time = time.time()    # update while any blocks are moving
-        self.old_stop_time = time.time()
+        self.old_stop_time = time.time()      # store previous stopped time
 
-        self.colour_check_time = time.time()
-        self.detected_colour = None
+        self.colour_check_time = time.time()  # store when colour check began
+        self.detected_colour = None           # store detected colour
 
-        # variables to store current state
+        # Variables to store current state
         self.state = STATE_RESET
+        # State functions
         self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
                             self.state_colour, self.state_place, self.state_error,\
                             self.state_trap, self.state_toss)
-        self.desired_id = None
-        self.moving = True
-        self.grab_moving = False
+        self.desired_id = None    # id of desired box
+        self.moving = True        # Track if belt is moving
+        self.grab_moving = False  # Track if we want to grab moving
 
     def rospy_init(self):
         # Create node
@@ -125,18 +124,18 @@ class StateMachine:
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
         # Publish to desired joint states for direct access
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
-        # Publish to desired joint states for direct access
+        # Publish to desired joint angles 
         self.theta_pub = rospy.Publisher('desired_thetas', Thetas, queue_size=1)
         # Publish to gripper
         self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
-        # Subscribe to camera - TODO
+        # Subscribe to camera
         rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
-        # Subscribe to angle error - TODO
+        # Subscribe to angle error
         rospy.Subscriber('position_error', Float32, self.position_error_callback)
         # Subscribe to colour detection
         rospy.Subscriber('box_colour', String, self.colour_detect_callback)
         
-        # Reset before camera data
+        # Reset immediately
         self.state_reset()
 
         while self.camera_stale and not rospy.is_shutdown():
@@ -215,20 +214,25 @@ class StateMachine:
         Publishes a request to the "colour_request" topic and subscribes to the
         "box_colour" topic to receive the response. Returns ColorRGBA.
         '''
-        self.colour_check_time = time.time()
+        self.colour_check_time = time.time()  # Time colour request began
         rospy.loginfo('request_colour: starting')
-        request = Bool(); request.data = True
-        detected_colours = []
-        while self.detected_colour is None or (len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME):
+        request = Bool(); request.data = True  # Prepare request
+        detected_colours = []  # Store detected colours
+        # Loop until required number of samples required or until timeout
+        while len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME:
             rospy.loginfo('request_colour: requesting colour')
+            # Request colour
             self.detected_colour = None
             self.colour_pub.publish(request)
             while not self.detected_colour and not rospy.is_shutdown():
                 time.sleep(0.01)
+            # It not other, store colour
             if not self.detected_colour == 'other':
                 detected_colours.append(self.detected_colour)
+        # If no colours found, return other
         if len(detected_colours) == 0:
             return 'other'
+        # Find most common colour
         counter = Counter(detected_colours)
         colour = counter.most_common(n=1)[0][0]
         rospy.loginfo(f'request_colour: returning {colour}')
@@ -236,19 +240,25 @@ class StateMachine:
         return colour
 
     def position_error_callback(self, msg):
-        # TODO - track change in position error to see if robot is still moving
-        # print(f'pos error callback = {msg.data}')
+        # Save error from desired thetas
         self.position_error = msg.data
 
-    def desired_pos_publisher(self, coords, pitch=None, rad_offset=0):
+    def desired_pos_publisher(self, coords, pitch=None, rad_offset=0, dry=False):
         '''
         Accept coords and optional pitch
         Return if command was issued
         if pitch is not supplied, try as straight down as possible
+
+        Parameters:
+        coord - (x, y, z)
+        pitch - radians
+        rad_offset - radius offset
+        dry - dry run (don't do anything, only return if possible)
         '''
         self.position_error = ERROR_TOL*10
         pos = Pos()
         pos.x, pos.y, pos.z = coords
+        # Offset radius
         if not rad_offset == 0:
             rad_orig = np.sqrt(pos.x**2 + pos.y**2)
             rad_new = rad_orig + rad_offset
@@ -257,7 +267,8 @@ class StateMachine:
         if pitch is not None:  # if pitch supplied, try to reach it or fail
             if inv_kin(coords, pitch, self_check=False, check_possible=True):
                 pos.pitch = pitch
-                self.pos_pub.publish(pos)
+                if not dry:
+                    self.pos_pub.publish(pos)
                 return True
             print(f'NOT POSSIBLE')
             return False
@@ -265,7 +276,8 @@ class StateMachine:
             for pitch in np.linspace(-np.pi/2, 0, 10):
                 if inv_kin(coords, pitch, self_check=False, check_possible=True):
                     pos.pitch = pitch
-                    self.pos_pub.publish(pos)
+                    if not dry:
+                        self.pos_pub.publish(pos)
                     return True
             print(f'NOT POSSIBLE')
             return False
@@ -277,7 +289,6 @@ class StateMachine:
         '''
         msg = GripperState(); msg.open = open_gripper
         self.gripper_pub.publish(msg)
-        time.sleep(GRAB_TIME)
 
     def delete_box(self, box_id):
         self.box_lock.acquire()
@@ -286,6 +297,9 @@ class StateMachine:
         self.box_lock.release()
 
     def delete_old_boxes(self):
+        '''
+        Delete boxes that haven't been seen in MAX_BLOCK_AGE seconds
+        '''
         self.box_lock.acquire()
         curr_time = time.time()
         dictkeys = list(self.boxes.keys())
@@ -297,6 +311,10 @@ class StateMachine:
         
 
     def run(self):
+        '''
+        Main loop
+        Call loop until rospy exits
+        '''
         while not rospy.is_shutdown():
             while self.camera_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
@@ -304,7 +322,6 @@ class StateMachine:
                 return 0
             #self.camera_stale = True
             rospy.loginfo('run: looping')
-            self.delete_old_boxes()
             self.loop()
 
     def grab_moving(self):
@@ -370,24 +387,38 @@ class StateMachine:
         If 
         '''
         # Get the current coordinates of the desired box
-        box = self.boxes[box_id]; x = box.x; y = box.y; z = EMPTY_HEIGHT
+        box = self.boxes[box_id]; x = box.x; y = box.y
          
+        # Pre-emptively check if it will be possibly to grab
+        z = GRABBY_HEIGHT
+        coords = (x, y, z)
+        possible_grab = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET, dry=True)
+        if not possible_grab:
+            return STATE_FIND
+        # Move to above box
+        z = EMPTY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
         if not possible:
             return STATE_FIND
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        # Move to grab box
         z = GRABBY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
+        # We already checked it was possible to no need to check
         if not possible:
+            rospy.logwarn('Pre-emptive check failed')
             return STATE_RESET
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        # Allow it to stabilise
         time.sleep(0.2)
+        # Grab
         self.command_gripper(open_gripper=False)
         time.sleep(GRAB_TIME)
+        # Move up
         z = CARRY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
@@ -404,6 +435,9 @@ class StateMachine:
         use block position and/or position error to change state or issue command to gripper or joint_controller
         '''
         rospy.loginfo(f"State = {STATE_NAMES[self.state]}")
+        # Delete old boxes
+        self.delete_old_boxes()
+        # Act on state and update state
         self.state = self.state_funcs[self.state]()
 
     def move_to(self, coords, pitch: float, rad_offset: int = 0) -> bool:
@@ -418,13 +452,6 @@ class StateMachine:
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
         self.command_gripper(open_gripper=True)
-        # self.move_to(POSITION_IDLE, pitch=0)
-        #joint_state = JointState()
-        #joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        #joint_state.position = (0, 0, 0, np.pi/2)
-        #joint_state.velocity = (3, 3, 3, 6)
-        #self.joint_pub.publish(joint_state)
-        #time.sleep(0.5)
         thetas = Thetas()
         thetas.thetas = (0, 0, 0, np.pi/2)
         self.position_error = ERROR_TOL*10
@@ -468,12 +495,9 @@ class StateMachine:
         rospy.loginfo(f'state_grab: starting')
         alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
+            rospy.loginfo(f'state_grab: failed')
             return alt_state
         rospy.loginfo(f'state_grab: got block')
-
-        # Move the block to an intermediate position closer to the base to
-        # avoid hitting other block when moving towards the 
-        # self.move_to(POSITION_INTERMEDIATE, pitch=-np.pi/2)
 
         # Advance to the next state
 
@@ -503,7 +527,6 @@ class StateMachine:
         '''
         # Get the x, y coords of the desired drop-off zone
         coords = DROPOFF_POSITION[self.detected_colour]
-        # coords = DROPOFF_POSITION['green'] # TODO: un-hardcode this
 
         # To avoid collision, from the colour detection pose first rotate the
         # base to the x, y coordinate of the desired drop-off zone
@@ -520,6 +543,7 @@ class StateMachine:
         # Release the block
         time.sleep(0.3)
         self.command_gripper(open_gripper=True)
+        time.sleep(GRAB_TIME)
 
         # # Move the arm back up slightly before returning to reset position
         # coords = (coords[0], coords[1], CARRY_HEIGHT)
