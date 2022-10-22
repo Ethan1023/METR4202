@@ -4,9 +4,9 @@
   <include file="$(find dynamixel_interface)/launch/dynamixel_interface_controller.launch"/>
 
   <!-- Start joint controller (incl. inv. kin. and collision detection) -->
-  <node pkg="metr4202" type="joint_controller_ros.py" name="joint_controller"/>
+  <node pkg="metr4202" type="joint_controller_ros.py" name="joint_controller" output="screen" respawn="true"/>
 
   <!-- Start gripper controller (incl. inv. kin. and collision detection) -->
-  <node pkg="metr4202" type="gripper_ros.py" name="gripper"/>
+  <node pkg="metr4202" type="gripper_ros.py" name="gripper" output="screen" respawn="true"/>
 
 </launch>
