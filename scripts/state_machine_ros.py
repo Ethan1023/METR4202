@@ -307,37 +307,61 @@ class StateMachine:
             self.delete_old_boxes()
             self.loop()
 
-    # def grab_moving(self):
-    #     '''
-    #     Decides whether we should pick up a box while the belt is moving or if
-    #     we should wait for it to stop. Returns True to pick up while moving.
-    #     '''
-    #     # If the belt is currently stopped, we can decide to not grab moving
-    #     # if the belt stopped more than X seconds ago
-    #     if not self.moving:
-    #         if time.time() - self.last_moved_time > TASK3B_THRESHOLD:
-    #             self.grab_moving = False
+    def grab_moving(self):
+        '''
+        Decides whether we should pick up a box while the belt is moving or if
+        we should wait for it to stop. Returns True to pick up while moving.
+        '''
+        # If the belt is currently stopped, we can decide to not grab moving
+        # if the belt stopped more than X seconds ago
+        if not self.moving:
+            if time.time() - self.last_moved_time > TASK3B_THRESHOLD:
+                self.grab_moving = False
 
-    #     # If the belt is currently moving, we can decide to grab moving if the
-    #     # last period of stopping was less than X seconds
-    #     else:
-    #         if self.last_stopping_duration < TASK3B_THRESHOLD:
-    #             self.grab_moving = True
+        # If the belt is currently moving, we can decide to grab moving if the
+        # last period of stopping was less than X seconds
+        else:
+            if self.last_stopping_duration < TASK3B_THRESHOLD:
+                self.grab_moving = True
     
-    def grab_closest(self):
+    def box_distance(self, box: Box) -> float:
         '''
-        returns: id of block with smallest radius (block to be grabbed first)
+        Returns the distance of the given box from the fixed frame.
         '''
-        closest_id = None; min_distance = math.inf
+        return np.linalg.norm(np.array([box.x, box.y]))
 
+    def box_rel_zrot(self, box: Box) -> float:
+        '''
+        Returns the magnitude of the relative rotation of the given box
+        to the end effector in rads.
+        '''
+        ang = np.arctan(box.y / box.x)
+        return abs(ang - abs(box.zrot))
+
+    def heuristic_relative_rotation(angle: float) -> float:
+        '''
+        Returns a float between 0 and 1 corresponding to the heuristic
+        score of the given relative rotation angle.
+        '''
+        angle = angle % np.pi/2 # set angle between 0 and 90 deg
+        return np.deg2rad(35) < angle < np.deg2rad(55)
+
+    def grab_best(self) -> str:
+        '''
+        Applies various heuristics to determine the ID of the box most
+        ideal to pick up.
+        '''
+        id_scores = []
         for box_id in self.boxes:
             box = self.boxes[box_id]
-            dist = np.sqrt(box.x**2 + box.y**2)
-            if dist < min_distance:
-                closest_id = box_id
-                min_distance = dist
+            # Distance heuristic inversely scales box distance by max. dist.
+            h_dist = 1 - self.box_distance(box) / 0.31
+            # Relative rotation heuristic scales relative rotation such that
+            # multiples of 90 deg scale to 1 and multiples of 45 deg to 0
+            h_zrot = self.heuristic_relative_rotation()
+            id_scores.append((box_id, h_dist + h_zrot))
 
-        return closest_id
+        return sorted(id_scores, key=lambda t: t[1])[0]
 
     def pickup_block(self, box_id: str) -> int:
         '''
@@ -416,27 +440,23 @@ class StateMachine:
         while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(1)
             return STATE_FIND
-            #time.sleep(0.01)
-
         rospy.loginfo(f'state_find: boxes exist')
-        # TODO
-        #while self.moving and self.grab_moving == False and not rospy.is_shutdown():
-        #    time.sleep(0.01)
 
+        while self.moving and self.grab_moving == False:
+            time.sleep(0.01)
+            
         rospy.loginfo(f'state_find: selecting box')
-        self.desired_id = self.grab_closest()
-        # # Check that angle of desired block is less than 30 degrees, 
-        # # if more than 30 degrees, wait until stopped again
-        # # zrot is constrained to being between 0 and 45 degrees
-        # if abs(self.boxes[self.desired_id].zrot)/4 > ZROT_LIMIT:
-        #     while self.moving == False:
-        #         time.sleep(0.01)
-        #         # if it's stopped for more than 10s, task 3a
-        #         if (self.last_stopped_time - self.last_moved_time) > 10:
-        #             #TODO - 3a logic
-        #             return STATE_GRAB
-        #         # otherwise assume task 1 or 2 and wait for better orientation
-        #         return STATE_FIND
+        self.desired_id = self.grab_best()
+        while self.moving == False:
+            time.sleep(0.01)
+            # if belt is still for more than 10s, assume 3a
+            if (self.last_stopped_time - self.last_moved_time) > 10:
+                return STATE_GRAB
+            # if belt has been still for less than 10s and more than 9s
+            # assume 1 or 2 and wait for belt to start moving again
+            if (self.last_stopped_time - self.last_moved_time) > 9:
+                time.sleep(1)
+
         rospy.loginfo(f'state_find: returning')
         return STATE_GRAB
 
