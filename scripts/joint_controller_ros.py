@@ -46,7 +46,7 @@ class JointController:
         rospy.Subscriber('desired_pose', Pose, self.end_pose_callback)
         rospy.Subscriber('desired_thetas', Thetas, self.desired_theta_callback)
 
-        while len(self.joint_names) == 0:
+        while len(self.joint_names) == 0 and not rospy.is_shutdown():
             # Block operation until state vector obtained
             time.sleep(0.01)
     
@@ -219,7 +219,9 @@ class JointController:
                 rospy.logdebug(f'WARNING - Reached temporary waypoint')
             current_pos = self.get_current_pos()
             # Get 'waypoint'
-            temp_desired_pos = modify_path(current_pos, (desired_coords, desired_pitch))
+            #temp_desired_pos = modify_path(current_pos, (desired_coords, desired_pitch))
+            # No waypoint
+            temp_desired_pos = (desired_coords, desired_pitch)
             # Check waypoint is possible
             possible = inv_kin(temp_desired_pos[0], temp_desired_pos[1], check_possible=True)
             if not possible:

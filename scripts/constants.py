@@ -14,7 +14,7 @@ TOT_L = L1+L2+L3+L4
 GRAB_RANGE = L2 + L3
 
 # TRANSFORMATIONS
-T_CAMERA_TO_FIXED = [[0.000, 1.000,  0.000, 0.206],
+T_CAMERA_TO_FIXED = [[0.000, 1.000,  0.000, 0.190],
                      [1.000, 0.000,  0.000, 0.000],
                      [0.000, 0.000, -1.000, 0.460],
                      [0.000, 0.000,  0.000, 1.000]]
@@ -31,8 +31,9 @@ THETA_RANGES = ((-2.5, 2.5), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 
 # CONTROLLER
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
+ERROR_TOL_COARSE = 0.5  # get thetas within this angle when moving to a pos
 
-THETA_OFFSET = (0.00, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
+THETA_OFFSET = (-0.01, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
 RAD_OFFSET = -0.03
 
 # Highly recommend constant gain across joints 2-4 with no offset
@@ -92,8 +93,8 @@ POSITION_INTERMEDIATE = (0.1, 0, 0.12)
 # BLOCK DROPOFF ZONES
 DROPOFF_ZONE = {
     1: (-0.05,  0.15),
-    2: (-0.15,  0.07),
-    3: (-0.15, -0.07),
+    2: (-0.17,  0.05),
+    3: (-0.17, -0.05),
     4: (-0.05, -0.15),
 }
 
