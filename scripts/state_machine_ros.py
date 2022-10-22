@@ -155,6 +155,7 @@ class StateMachine:
         # Add new boxes or update existing ones from camera data
         for box_transform in box_transforms.transforms:
             box_id = box_transform.fiducial_id
+            print(f'x,y,z = {box_transform.transform.translation.x},{box_transform.transform.translation.y},{box_transform.transform.translation.z}')
 
             # Update existing boxes
             if box_id in self.boxes:
@@ -216,12 +217,19 @@ class StateMachine:
         '''
         self.colour_check_time = time.time()  # Time colour request began
         rospy.loginfo('request_colour: starting')
+<<<<<<< HEAD
         request = Bool(); request.data = True  # Prepare request
         detected_colours = []  # Store detected colours
         # Loop until required number of samples required or until timeout
         while len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME:
             rospy.loginfo('request_colour: requesting colour')
             # Request colour
+=======
+        request = Bool(); request.data = True
+        detected_colours = []
+        while self.detected_colour is None or (len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME):
+            # rospy.loginfo('request_colour: requesting colour')
+>>>>>>> state_machine
             self.detected_colour = None
             self.colour_pub.publish(request)
             while not self.detected_colour and not rospy.is_shutdown():
@@ -353,15 +361,17 @@ class StateMachine:
         to the end effector in rads.
         '''
         ang = np.arctan(box.y / box.x)
-        return abs(ang - abs(box.zrot))
+        #rospy.loginfo(f'^%& {np.rad2deg(ang) = } deg')
+        return abs(ang - box.zrot)
 
     def heuristic_relative_rotation(self, angle: float) -> float:
         '''
         Returns a float between 0 and 1 corresponding to the heuristic
         score of the given relative rotation angle.
         '''
-        angle = angle % np.pi/2 # set angle between 0 and 90 deg
-        return np.deg2rad(35) < angle < np.deg2rad(55)
+        #rospy.loginfo(f'heuristic angle: {np.rad2deg(angle)} deg')
+        angle = angle % (np.pi/2) # set angle between 0 and 90 deg
+        return float('-inf') if np.deg2rad(25) < angle < np.deg2rad(65) else 1
 
     def grab_best(self) -> str:
         '''
@@ -379,7 +389,9 @@ class StateMachine:
             h_zrot = self.heuristic_relative_rotation(box_zrot)
             id_scores.append((box_id, h_dist + h_zrot))
 
-        return sorted(id_scores, key=lambda t: t[1])[0]
+        best_id, best_score = sorted(id_scores, key=lambda t: t[1], reverse=True)[0]
+        rospy.loginfo(f'heuristic score: {best_score} for ID={best_id}')
+        return best_id if best_score > 0 else None
 
     def pickup_block(self, box_id: str) -> int:
         '''
@@ -440,20 +452,20 @@ class StateMachine:
         # Act on state and update state
         self.state = self.state_funcs[self.state]()
 
-    def move_to(self, coords, pitch: float, rad_offset: int = 0) -> bool:
+    def move_to(self, coords, pitch: float, rad_offset: int = 0, error_tol: float = ERROR_TOL) -> bool:
         '''
         A wrapper around desired_pos_publisher that handles waiting for the
         end effector to reach the desired position.
         '''
         self.desired_pos_publisher(coords, pitch, rad_offset)
-        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+        while self.position_error > error_tol and not rospy.is_shutdown():
             time.sleep(0.01)
 
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
         self.command_gripper(open_gripper=True)
         thetas = Thetas()
-        thetas.thetas = (0, 0, 0, np.pi/2)
+        thetas.thetas = (0, -np.pi/4, np.pi*3/4, np.pi/2)
         self.position_error = ERROR_TOL*10
         self.theta_pub.publish(thetas)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
@@ -470,20 +482,29 @@ class StateMachine:
             return STATE_FIND
         rospy.loginfo(f'state_find: boxes exist')
 
-        while self.moving and self.grab_moving == False:
-            time.sleep(0.01)
+        #while self.moving and self.grab_moving == False:
+        #    rospy.loginfo(f'state_find: waiting for belt to stop')
+        #    time.sleep(0.5)
             
         rospy.loginfo(f'state_find: selecting box')
         self.desired_id = self.grab_best()
-        while self.moving == False:
-            time.sleep(0.01)
-            # if belt is still for more than 10s, assume 3a
-            if (self.last_stopped_time - self.last_moved_time) > 10:
-                return STATE_GRAB
-            # if belt has been still for less than 10s and more than 9s
-            # assume 1 or 2 and wait for belt to start moving again
-            if (self.last_stopped_time - self.last_moved_time) > 9:
-                time.sleep(1)
+        if not self.desired_id:
+            rospy.loginfo(f'state_find: no suitable box positions')
+            time.sleep(0.5)
+            return STATE_FIND
+        rospy.loginfo(f'state_find: chose box {self.desired_id}')
+       
+        # if belt is still for more than 10s, assume 3a
+        if (self.last_stopped_time - self.last_moved_time) > 10:
+            rospy.loginfo(f'state_find: identified task 3a')
+            return STATE_GRAB
+            
+        # if belt has been still for less than 10s and more than 9s
+        # assume 1 or 2 and wait for belt to start moving again
+        if (self.last_stopped_time - self.last_moved_time) > 9:
+            rospy.loginfo(f'state_find: sleeping for a second')
+            time.sleep(1)
+            return STATE_FIND
 
         rospy.loginfo(f'state_find: returning')
         return STATE_GRAB
@@ -530,11 +551,12 @@ class StateMachine:
 
         # To avoid collision, from the colour detection pose first rotate the
         # base to the x, y coordinate of the desired drop-off zone
-        p = np.array(coords)
-        x, y = np.linalg.norm([0.1, 0.1]) / np.linalg.norm(p) * p
-        coords = (x, y, COLOUR_DETECT_HEIGHT)
+        #p = np.array(coords)
+        #x, y = np.linalg.norm([0.1, 0.1]) / np.linalg.norm(p) * p
+        #coords = (x, y, CARRY_HEIGHT)
+        coords = (coords[0], coords[1], CARRY_HEIGHT)
         # coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT)
-        self.move_to(coords, pitch=0)
+        self.move_to(coords, pitch=-np.pi/2, error_tol=ERROR_TOL_COARSE)
 
         # Move end-effector directly down to place the block
         coords = (coords[0], coords[1], DROPOFF_HEIGHT)
