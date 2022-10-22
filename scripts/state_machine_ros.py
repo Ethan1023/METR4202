@@ -11,6 +11,7 @@ from threading import Lock
 
 import numpy as np
 import rospy
+from collections import Counter
 
 from std_msgs.msg import Bool, Float32, String
 from sensor_msgs.msg import JointState
@@ -104,6 +105,7 @@ class StateMachine:
         self.old_stop_time = time.time()
 
         self.colour_check_time = time.time()
+        self.detected_colour = None
 
         # variables to store current state
         self.state = STATE_RESET
@@ -215,16 +217,23 @@ class StateMachine:
         '''
         self.colour_check_time = time.time()
         rospy.loginfo('request_colour: starting')
-        self.detected_colour = None
         request = Bool(); request.data = True
-        while self.detected_colour is None or (self.detected_colour == 'other' and time.time() - self.colour_check_time < COLOUR_CHECK_TIME):
+        detected_colours = []
+        while self.detected_colour is None or (len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME):
             rospy.loginfo('request_colour: requesting colour')
+            self.detected_colour = None
             self.colour_pub.publish(request)
-
             while not self.detected_colour and not rospy.is_shutdown():
                 time.sleep(0.01)
-        rospy.loginfo('request_colour: returning')
-        return self.detected_colour
+            if not self.detected_colour == 'other':
+                detected_colours.append(self.detected_colour)
+        if len(detected_colours) == 0:
+            return 'other'
+        counter = Counter(detected_colours)
+        colour = counter.most_common(n=1)[0][0]
+        rospy.loginfo(f'request_colour: returning {colour}')
+        self.detected_colour = colour
+        return colour
 
     def position_error_callback(self, msg):
         # TODO - track change in position error to see if robot is still moving
