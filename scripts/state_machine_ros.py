@@ -81,6 +81,7 @@ class StateMachine:
         if dorospy:
             self.rospy_init()
         print(f'StateMachine initialised')
+        rospy.loginfo(f'StateMachine initialised')
 
     def other_init(self):
         self.box_lock = Lock()
@@ -184,11 +185,11 @@ class StateMachine:
             if self.omega > OMEGA_THRESHOLD:
                 self.last_moved_time = time.time()
                 self.moving = True
-                print(f'Time since started = {self.last_moved_time - self.last_stopped_time} s')
+                rospy.logdebug(f'Time since started = {self.last_moved_time - self.last_stopped_time} s')
             else:
                 self.last_stopped_time = time.time()
                 self.moving = False
-                print(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
+                rospy.logdebug(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
 
         # Update "stale" status of camera
         if len(self.boxes) > 0:
@@ -340,7 +341,7 @@ class StateMachine:
         read current state
         use block position and/or position error to change state or issue command to gripper or joint_controller
         '''
-        print(f"State = {STATE_NAMES[self.state]}")
+        rospy.loginfo(f"State = {STATE_NAMES[self.state]}")
         self.state = self.state_funcs[self.state]()
 
     def move_to(self, coords, pitch: float, rad_offset: int = 0) -> bool:
@@ -372,22 +373,22 @@ class StateMachine:
         while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
 
-        while self.moving and self.grab_moving == False:
+        while self.moving and self.grab_moving == False and not rospy.is_shutdown():
             time.sleep(0.01)
             
         self.desired_id = self.grab_closest()
-        # Check that angle of desired block is less than 30 degrees, 
-        # if more than 30 degrees, wait until stopped again
-        # zrot is constrained to being between 0 and 45 degrees
-        if abs(self.boxes[self.desired_id].zrot)/4 > ZROT_LIMIT:
-            while self.moving == False:
-                time.sleep(0.01)
-                # if it's stopped for more than 10s, task 3a
-                if (self.last_stopped_time - self.last_moved_time) > 10:
-                    #TODO - 3a logic
-                    return STATE_GRAB
-                # otherwise assume task 1 or 2 and wait for better orientation
-                return STATE_FIND
+        # # Check that angle of desired block is less than 30 degrees, 
+        # # if more than 30 degrees, wait until stopped again
+        # # zrot is constrained to being between 0 and 45 degrees
+        # if abs(self.boxes[self.desired_id].zrot)/4 > ZROT_LIMIT:
+        #     while self.moving == False:
+        #         time.sleep(0.01)
+        #         # if it's stopped for more than 10s, task 3a
+        #         if (self.last_stopped_time - self.last_moved_time) > 10:
+        #             #TODO - 3a logic
+        #             return STATE_GRAB
+        #         # otherwise assume task 1 or 2 and wait for better orientation
+        #         return STATE_FIND
 
         return STATE_GRAB
 
@@ -414,7 +415,7 @@ class StateMachine:
         # Checking the block colour
         # If fails, open gripper and return to state_find
         coords = POSITION_COLOUR_DETECT
-        self.move_to(coords, pitch=0)
+        self.move_to(coords, pitch=np.pi/6)
 
         detected_colour = self.request_colour()
 

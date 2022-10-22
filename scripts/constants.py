@@ -27,7 +27,7 @@ WAIT_POSITION = [[1.000, 0.000,  0.000, 0.000],
 
 # SAFETY
 MAX_JOINT_VEL = (5, 3, 5, 10)
-THETA_RANGES = ((-3.1415, 3.1415), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
+THETA_RANGES = ((-2.5, 2.5), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 
 # CONTROLLER
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
@@ -89,8 +89,8 @@ POSITION_INTERMEDIATE = (0.1, 0, 0.12)
 # BLOCK DROPOFF ZONES
 DROPOFF_ZONE = {
     1: (-0.05,  0.15),
-    2: (-0.15,  0.10),
-    3: (-0.15, -0.10),
+    2: (-0.15,  0.07),
+    3: (-0.15, -0.07),
     4: (-0.05, -0.15),
 }
 
