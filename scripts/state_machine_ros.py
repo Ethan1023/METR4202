@@ -14,14 +14,14 @@ import rospy
 
 from std_msgs.msg import Bool, Float32, String
 from sensor_msgs.msg import JointState
-from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
+from metr4202.msg import BoxTransformArray, Pos, GripperState, Thetas  # Custom messages from msg/
 
 from inverse_kinematics import inv_kin
 # from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
 #                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
 #                       STATE_TOSS, \
 #                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-#                       RAD_OFFSET, H_BLOCK, COLOUR_CHECK_TIME
+#                       RAD_OFFSET, H_BLOCK, COLOUR_CHECK_TIME, MAX_BLOCK_AGE
 from maths import yaw_from_quat
 
 from constants import *
@@ -123,6 +123,8 @@ class StateMachine:
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
         # Publish to desired joint states for direct access
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
+        # Publish to desired joint states for direct access
+        self.theta_pub = rospy.Publisher('desired_thetas', Thetas, queue_size=1)
         # Publish to gripper
         self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
         # Subscribe to camera - TODO
@@ -131,6 +133,9 @@ class StateMachine:
         rospy.Subscriber('position_error', Float32, self.position_error_callback)
         # Subscribe to colour detection
         rospy.Subscriber('box_colour', String, self.colour_detect_callback)
+        
+        # Reset before camera data
+        self.state_reset()
 
         while self.camera_stale and not rospy.is_shutdown():
             # Block operation until camera data received
@@ -267,8 +272,20 @@ class StateMachine:
 
     def delete_box(self, box_id):
         self.box_lock.acquire()
-        del self.boxes[box_id]
+        if box_id in self.boxes:
+            del self.boxes[box_id]
         self.box_lock.release()
+
+    def delete_old_boxes(self):
+        self.box_lock.acquire()
+        curr_time = time.time()
+        dictkeys = list(self.boxes.keys())
+        for box_id in dictkeys:
+            if curr_time - self.boxes[box_id].t_hist[-1] > MAX_BLOCK_AGE:
+                rospy.loginfo(f'delete_old_boxes: deleting {box_id}')
+                del self.boxes[box_id]
+        self.box_lock.release()
+        
 
     def run(self):
         while not rospy.is_shutdown():
@@ -277,6 +294,8 @@ class StateMachine:
             if rospy.is_shutdown():
                 return 0
             #self.camera_stale = True
+            rospy.loginfo('run: looping')
+            self.delete_old_boxes()
             self.loop()
 
     # def grab_moving(self):
@@ -366,12 +385,18 @@ class StateMachine:
         '''Moves the robot into the idle position with the gripper open.'''
         self.command_gripper(open_gripper=True)
         # self.move_to(POSITION_IDLE, pitch=0)
-        joint_state = JointState()
-        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        joint_state.position = (0, 0, 0, np.pi/2)
-        joint_state.velocity = (3, 3, 3, 6)
-        self.joint_pub.publish(joint_state)
-        time.sleep(0.5)
+        #joint_state = JointState()
+        #joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+        #joint_state.position = (0, 0, 0, np.pi/2)
+        #joint_state.velocity = (3, 3, 3, 6)
+        #self.joint_pub.publish(joint_state)
+        #time.sleep(0.5)
+        thetas = Thetas()
+        thetas.thetas = (0, 0, 0, np.pi/2)
+        self.position_error = ERROR_TOL*10
+        self.theta_pub.publish(thetas)
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+            time.sleep(0.01)
         return STATE_FIND
 
     def state_find(self):
@@ -380,7 +405,9 @@ class StateMachine:
         '''
         rospy.loginfo(f'state_find: starting')
         while len(self.boxes) == 0 and not rospy.is_shutdown():
-            time.sleep(0.01)
+            time.sleep(1)
+            return STATE_FIND
+            #time.sleep(0.01)
 
         rospy.loginfo(f'state_find: boxes exist')
         # TODO
@@ -461,6 +488,7 @@ class StateMachine:
         self.move_to(coords, pitch=-np.pi/2)
 
         # Release the block
+        time.sleep(0.3)
         self.command_gripper(open_gripper=True)
 
         # # Move the arm back up slightly before returning to reset position

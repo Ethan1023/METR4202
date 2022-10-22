@@ -13,7 +13,7 @@ import rospy
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
-from metr4202.msg import Pos  # Custom messages from msg/
+from metr4202.msg import Pos, Thetas  # Custom messages from msg/
 
 from collision_detect import modify_path, CollisionHandler
 from forward_kinematics import derivePoE, PoE
@@ -44,6 +44,7 @@ class JointController:
         # Subscribe to requested position
         rospy.Subscriber('desired_pos', Pos, self.end_pos_callback)
         rospy.Subscriber('desired_pose', Pose, self.end_pose_callback)
+        rospy.Subscriber('desired_thetas', Thetas, self.desired_theta_callback)
 
         while len(self.joint_names) == 0:
             # Block operation until state vector obtained
@@ -52,6 +53,7 @@ class JointController:
     def other_init(self):
         self.theta_stale = True
         self.pos_stale = True
+        self.ang_stale = True
         # Variables for storing most recent joint state
         # Note that a list in ROS is interpreted as a tuple
         self.joint_names = ()
@@ -75,17 +77,25 @@ class JointController:
 
     def run(self):
         while not rospy.is_shutdown():
-            while self.pos_stale and not rospy.is_shutdown():
+            while self.pos_stale and self.ang_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
             if rospy.is_shutdown():
                 return 0
-            self.pos_stale = True
-            self.go_to_pos(self.desired_coords, self.desired_pitch)
+            if not self.pos_stale:
+                self.pos_stale = True
+                self.go_to_pos(self.desired_coords, self.desired_pitch)
+            elif not self.ang_stale:
+                self.ang_stale = True
+                self.go_to_thetas(self.desired_thetas)
 
     def end_pos_callback(self, pos):
         self.desired_coords = np.array([pos.x, pos.y, pos.z])
         self.desired_pitch = pos.pitch
         self.pos_stale = False
+
+    def desired_theta_callback(self, ang):
+        self.desired_thetas = np.array(ang.thetas)
+        self.ang_stale = False
 
     def end_pose_callback(self, pose):
         self.desired_coords = np.array([pose.position.x, pose.position.y, pose.position.z])
@@ -105,16 +115,19 @@ class JointController:
         for i, name in enumerate(self.names):
             for theta, new_name in zip(self.joint_positions, self.joint_names):
                 if name == new_name:
-                    thetas.append(theta - THETA_OFFSET[i])
+                    thetas.append(theta)
+        self.raw_thetas = np.array(thetas)
+        for i in range(len(thetas)):
+            thetas[i] = thetas[i] - THETA_OFFSET[i]
         if thetas[2] < 0:  # Becomes negative if flipped
-            for i in range(0, len(thetas)):
+            for i in range(1, len(thetas)):
                 thetas[i] = thetas[i] + 2*THETA_OFFSET[i]
             
         self.thetas = thetas
         self.theta_stale = False
         # TODO - check for collision - set error state
 
-    def joint_state_publisher(self, desired_pos, desired_vel=None, flip=False):
+    def joint_state_publisher(self, desired_pos, desired_vel=None, flip=False, dooffset=True):
         '''
         Publish desired joint angles and velocities
         '''
@@ -122,9 +135,11 @@ class JointController:
         # TODO - once in safe pos, remove error state
         joint_state = JointState()
         joint_state.name = self.names
-        joint_state.position = desired_pos + np.array(THETA_OFFSET)
-        if flip:
-            joint_state.position[1:] -= 2*np.array(THETA_OFFSET)[1:]
+        joint_state.position = desired_pos
+        if dooffset:
+            joint_state.position = desired_pos + np.array(THETA_OFFSET)
+            if flip:
+                joint_state.position[1:] -= 2*np.array(THETA_OFFSET)[1:]
         # Limit joint angles
         for i in range(len(desired_pos)):
             if desired_pos[i] > THETA_RANGES[i][1]:
@@ -242,6 +257,48 @@ class JointController:
             # Update error
             error = np.sqrt(np.sum((desired_thetas-thetas)**2))
             error_temp = np.sqrt(np.sum((temp_desired_thetas-thetas)**2))
+            # Publsh angle errors to state machine
+            self.error_publisher(error)
+            rospy.logdebug(f'loop error = {error}')
+            rospy.logdebug('')
+            rospy.logdebug('')
+        self.error_publisher(error)
+        return True
+
+    def go_to_thetas(self, desired_thetas, gain=None, offset=None):
+        '''
+        Use gain to set vel?
+        '''
+        rospy.loginfo(f'go_to_angles({desired_thetas})')
+        if gain is None:
+            gain = np.array(CONTROLLER_GAIN)
+        if offset is None:
+            offset = np.array(CONTROLLER_OFFSET)
+        while self.theta_stale and not rospy.is_shutdown():  # Wait for new values
+            time.sleep(0.01)
+        thetas = np.array(self.raw_thetas)
+        self.theta_stale = True
+        error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
+        rospy.logdebug(f'init error = {error}')
+
+        while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
+            rospy.logdebug(f'Current thetas = {thetas}')
+            rospy.logdebug(f'Desired thetas = {desired_thetas}')
+            thetas_diff = abs(desired_thetas - thetas)  # State error
+            rospy.logdebug(f'Theta error = {thetas_diff}')
+            target_thetas_vel = thetas_diff * gain # P controller
+            target_thetas_mag = np.sqrt(np.sum(target_thetas_vel**2))  # Scale velocity back a little - nonlinear P
+            target_thetas_vel = target_thetas_vel/target_thetas_mag**0.5 + offset  # Offset by a min velocity
+            rospy.logdebug(f'Target joint vel = {target_thetas_vel}')
+            # Update velocity
+            self.joint_state_publisher(desired_thetas, target_thetas_vel, dooffset=False)
+            # Wait for new values
+            while self.theta_stale and not rospy.is_shutdown():
+                time.sleep(0.001)
+            thetas = np.array(self.raw_thetas)
+            self.theta_stale = True
+            # Update error
+            error = np.sqrt(np.sum((desired_thetas-thetas)**2))
             # Publsh angle errors to state machine
             self.error_publisher(error)
             rospy.logdebug(f'loop error = {error}')
