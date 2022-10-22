@@ -63,9 +63,5 @@ def grab_pos(x, y):  #matrix in array form
     return np.array([x, y, GRABBY_HEIGHT])
 
 
-def criteria_3a(x, y):
-    pass
-
-
 def which_state():
     pass
