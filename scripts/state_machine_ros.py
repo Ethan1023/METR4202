@@ -21,7 +21,7 @@ from inverse_kinematics import inv_kin
 #                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
 #                       STATE_TOSS, \
 #                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-#                       RAD_OFFSET, H_BLOCK
+#                       RAD_OFFSET, H_BLOCK, COLOUR_CHECK_TIME
 from maths import yaw_from_quat
 
 from constants import *
@@ -102,6 +102,8 @@ class StateMachine:
         self.last_stopped_time = time.time()   # update while any blocks are not moving
         self.last_moved_time = time.time()    # update while any blocks are moving
         self.old_stop_time = time.time()
+
+        self.colour_check_time = time.time()
 
         # variables to store current state
         self.state = STATE_RESET
@@ -206,12 +208,17 @@ class StateMachine:
         Publishes a request to the "colour_request" topic and subscribes to the
         "box_colour" topic to receive the response. Returns ColorRGBA.
         '''
+        self.colour_check_time = time.time()
+        rospy.loginfo('request_colour: starting')
         self.detected_colour = None
         request = Bool(); request.data = True
-        self.colour_pub.publish(request)
+        while self.detected_colour is None or (self.detected_colour == 'other' and time.time() - self.colour_check_time < COLOUR_CHECK_TIME):
+            rospy.loginfo('request_colour: requesting colour')
+            self.colour_pub.publish(request)
 
-        while not self.detected_colour and not rospy.is_shutdown():
-            time.sleep(0.01)
+            while not self.detected_colour and not rospy.is_shutdown():
+                time.sleep(0.01)
+        rospy.loginfo('request_colour: returning')
         return self.detected_colour
 
     def position_error_callback(self, msg):
@@ -332,7 +339,9 @@ class StateMachine:
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
         if not possible:
-            return STATE_RESET
+            return None
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+            time.sleep(0.01)
         return None
 
     def loop(self):
@@ -352,7 +361,6 @@ class StateMachine:
         self.desired_pos_publisher(coords, pitch, rad_offset)
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-        time.sleep(0.1)
 
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
@@ -370,12 +378,16 @@ class StateMachine:
         '''
         Sets self.desired_id to the block which should be picked first.
         '''
+        rospy.loginfo(f'state_find: starting')
         while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(0.01)
 
-        while self.moving and self.grab_moving == False and not rospy.is_shutdown():
-            time.sleep(0.01)
-            
+        rospy.loginfo(f'state_find: boxes exist')
+        # TODO
+        #while self.moving and self.grab_moving == False and not rospy.is_shutdown():
+        #    time.sleep(0.01)
+
+        rospy.loginfo(f'state_find: selecting box')
         self.desired_id = self.grab_closest()
         # # Check that angle of desired block is less than 30 degrees, 
         # # if more than 30 degrees, wait until stopped again
@@ -389,23 +401,26 @@ class StateMachine:
         #             return STATE_GRAB
         #         # otherwise assume task 1 or 2 and wait for better orientation
         #         return STATE_FIND
-
+        rospy.loginfo(f'state_find: returning')
         return STATE_GRAB
 
     def state_grab(self):
         '''
         Pick up the block with the ID chosen during the previous state.
         '''
+        rospy.loginfo(f'state_grab: starting')
         alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
             return alt_state
+        rospy.loginfo(f'state_grab: got block')
 
         # Move the block to an intermediate position closer to the base to
         # avoid hitting other block when moving towards the 
-        self.move_to(POSITION_INTERMEDIATE, pitch=-np.pi/2)
+        # self.move_to(POSITION_INTERMEDIATE, pitch=-np.pi/2)
 
         # Advance to the next state
 
+        rospy.loginfo(f'state_grab: returning')
         return STATE_COLOUR
 
     def state_colour(self):
