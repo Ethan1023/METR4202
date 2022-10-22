@@ -34,7 +34,7 @@ ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
 ERROR_TOL_COARSE = 0.5  # get thetas within this angle when moving to a pos
 
 THETA_OFFSET = (-0.01, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
-RAD_OFFSET = -0.03
+RAD_OFFSET = -0.015
 
 # Highly recommend constant gain across joints 2-4 with no offset
 CONTROLLER_GAIN = (2, 10, 10, 10)   # Gain on position error

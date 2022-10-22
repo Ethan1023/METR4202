@@ -79,8 +79,11 @@ class Box:
 class StateMachine:
     def __init__(self, dorospy: bool = True) -> None:
         self.other_init()
+        rospy.loginfo('StateMachine other init completed')
         if dorospy:
             self.rospy_init()
+        rospy.loginfo('StateMachine rospy init completed')
+        self.state_reset()
         print(f'StateMachine initialised')
         rospy.loginfo(f'StateMachine initialised')
 
@@ -128,19 +131,20 @@ class StateMachine:
         self.theta_pub = rospy.Publisher('desired_thetas', Thetas, queue_size=1)
         # Publish to gripper
         self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
+        rospy.loginfo('StateMachine publishers initialised')
         # Subscribe to camera
         rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
         # Subscribe to angle error
         rospy.Subscriber('position_error', Float32, self.position_error_callback)
         # Subscribe to colour detection
         rospy.Subscriber('box_colour', String, self.colour_detect_callback)
+        rospy.loginfo('StateMachine subscribers initialised')
         
         # Reset immediately
-        self.state_reset()
 
-        while self.camera_stale and not rospy.is_shutdown():
-            # Block operation until camera data received
-            time.sleep(0.01)
+        #while self.camera_stale and not rospy.is_shutdown():
+        #    # Block operation until camera data received
+        #    time.sleep(0.01)
 
     def camera_callback(self, box_transforms: BoxTransformArray) -> None:
         '''
@@ -217,19 +221,11 @@ class StateMachine:
         '''
         self.colour_check_time = time.time()  # Time colour request began
         rospy.loginfo('request_colour: starting')
-<<<<<<< HEAD
         request = Bool(); request.data = True  # Prepare request
         detected_colours = []  # Store detected colours
         # Loop until required number of samples required or until timeout
         while len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME:
-            rospy.loginfo('request_colour: requesting colour')
-            # Request colour
-=======
-        request = Bool(); request.data = True
-        detected_colours = []
-        while self.detected_colour is None or (len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME):
             # rospy.loginfo('request_colour: requesting colour')
->>>>>>> state_machine
             self.detected_colour = None
             self.colour_pub.publish(request)
             while not self.detected_colour and not rospy.is_shutdown():
@@ -237,6 +233,7 @@ class StateMachine:
             # It not other, store colour
             if not self.detected_colour == 'other':
                 detected_colours.append(self.detected_colour)
+        print(detected_colours)
         # If no colours found, return other
         if len(detected_colours) == 0:
             return 'other'
@@ -330,6 +327,7 @@ class StateMachine:
                 return 0
             #self.camera_stale = True
             rospy.loginfo('run: looping')
+            #time.sleep(5)
             self.loop()
 
     def grab_moving(self):

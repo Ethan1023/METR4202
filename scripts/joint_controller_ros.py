@@ -214,7 +214,9 @@ class JointController:
         # e.g. if height below wheel thing, but end destination in safe area, don't go low until clear of wheel
         #       if current pos above wheel - modify end pos to be safe height
         error_temp = ERROR_TOL
-        while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
+        do = True
+        while do or (error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale):
+            do = False
             if error_temp < ERROR_TOL:
                 rospy.logdebug(f'WARNING - Reached temporary waypoint')
             current_pos = self.get_current_pos()
@@ -282,8 +284,10 @@ class JointController:
         self.theta_stale = True
         error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
         rospy.logdebug(f'init error = {error}')
-
-        while error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale:
+        
+        do = True
+        while do or (error > ERROR_TOL and not rospy.is_shutdown() and self.ang_stale):
+            do = False
             rospy.logdebug(f'Current thetas = {thetas}')
             rospy.logdebug(f'Desired thetas = {desired_thetas}')
             thetas_diff = abs(desired_thetas - thetas)  # State error
