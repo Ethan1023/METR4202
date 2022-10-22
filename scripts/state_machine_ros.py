@@ -338,7 +338,7 @@ class StateMachine:
         ang = np.arctan(box.y / box.x)
         return abs(ang - abs(box.zrot))
 
-    def heuristic_relative_rotation(angle: float) -> float:
+    def heuristic_relative_rotation(self, angle: float) -> float:
         '''
         Returns a float between 0 and 1 corresponding to the heuristic
         score of the given relative rotation angle.
@@ -358,7 +358,8 @@ class StateMachine:
             h_dist = 1 - self.box_distance(box) / 0.31
             # Relative rotation heuristic scales relative rotation such that
             # multiples of 90 deg scale to 1 and multiples of 45 deg to 0
-            h_zrot = self.heuristic_relative_rotation()
+            box_zrot = self.box_rel_zrot(box)
+            h_zrot = self.heuristic_relative_rotation(box_zrot)
             id_scores.append((box_id, h_dist + h_zrot))
 
         return sorted(id_scores, key=lambda t: t[1])[0]
