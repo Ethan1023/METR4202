@@ -8,7 +8,6 @@ $ roslaunch metr4202 project.launch
 
 '''
 
-import math
 import time
 
 from threading import Lock  # Prevent weird behaviour when deleting boxes
@@ -100,8 +99,8 @@ class Box:
             rospy.logwarn(f'vel = {th_diff[mindex]/dt} NOT {th_diff[0]/dt}')
         vel = th_diff[mindex] / dt
         # th_curr = -179, th_old = 179
-        
-            
+
+
         return vel
     def future_pos(self, delta_t):
         '''
@@ -138,7 +137,7 @@ class StateMachine:
 
         #self.x_vels = []  # List of velocities
         #self.y_vels = []
-        
+
         #self.omegas = []  # list of angular velocities
         self.omega = 0    # average angular velocity (0 if not known)
         self.last_stopped_time = time.time()   # update while any blocks are not moving
@@ -169,7 +168,7 @@ class StateMachine:
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
         # Publish to desired joint states for direct access
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
-        # Publish to desired joint angles 
+        # Publish to desired joint angles
         self.theta_pub = rospy.Publisher('desired_thetas', Thetas, queue_size=1)
         # Publish to gripper
         self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
@@ -181,7 +180,7 @@ class StateMachine:
         # Subscribe to colour detection
         rospy.Subscriber('box_colour', String, self.colour_detect_callback)
         rospy.loginfo('StateMachine subscribers initialised')
-        
+
         #while self.camera_stale and not rospy.is_shutdown():
         #    # Block operation until camera data received
         #    time.sleep(0.01)
@@ -359,7 +358,7 @@ class StateMachine:
                 rospy.loginfo(f'delete_old_boxes: deleting {box_id}')
                 del self.boxes[box_id]
         self.box_lock.release()
-        
+
 
     def run(self):
         '''
@@ -397,7 +396,7 @@ class StateMachine:
                 self.grab_moving = True
             if time.time() - self.last_stopped_time > 10:
                 self.grab_moving = True
-    
+
     def box_distance(self, x: float, y: float) -> float:
         '''
         Returns the distance of the given box from the fixed frame.
@@ -428,7 +427,7 @@ class StateMachine:
         ideal to pick up.
         '''
         id_scores = []
-       
+
         self.box_lock.acquire()
         for box_id in self.boxes:
             box = self.boxes[box_id]
@@ -438,7 +437,7 @@ class StateMachine:
                 zrot = box.zrot
             else:
                 x, y, zrot = box.future_pos(PREDICT_TIME)
-            
+
             # Distance heuristic inversely scales box distance by max. dist.
             h_dist = 1 - self.box_distance(x, y) / 0.31
             # Relative rotation heuristic scales relative rotation such that
@@ -455,7 +454,7 @@ class StateMachine:
     def pickup_block(self, box_id: str, future: bool = False) -> int:
         '''
         Commands joints and end effector to pick up the box with the given ID.
-        If 
+        If
         '''
         # Get the current coordinates of the desired box
         box = self.boxes[box_id]
@@ -465,7 +464,7 @@ class StateMachine:
             x, y, _ = box.future_pos(PREDICT_TIME)
         # Save what time prediction was made at
         predict_time = time.time()
-         
+
         # Pre-emptively check if it will be possibly to grab
         z = GRABBY_HEIGHT
         coords = (x, y, z)
@@ -541,7 +540,7 @@ class StateMachine:
         thetas = Thetas()
         thetas.thetas = (0, -np.pi/4, np.pi*3/4, np.pi/2)
         self.position_error = None
-        while self.position_error is None and not rospy.is_shutdown():        
+        while self.position_error is None and not rospy.is_shutdown():
             self.theta_pub.publish(thetas)
             time.sleep(0.1)
         rospy.loginfo('thetas published')
@@ -574,12 +573,12 @@ class StateMachine:
             time.sleep(0.5)
             return STATE_FIND
         rospy.loginfo(f'state_find: chose box {self.desired_id}')
-        
+
         # if belt is still for more than 10s, assume 3a
         if (self.last_stopped_time - self.last_moved_time) > 10:
             rospy.loginfo(f'state_find: identified task 3a')
             return STATE_GRAB
-            
+
         # if belt has been still for less than 10s and more than 9s
         # assume 1 or 2 and wait for belt to start moving again
         if (self.last_stopped_time - self.last_moved_time) > 9:
@@ -599,21 +598,21 @@ class StateMachine:
             time.sleep(1)
             return STATE_FIND
         rospy.loginfo(f'state_find: boxes exist')
-        
+
         rospy.loginfo(f'state_find: {self.grab_moving = }')
         self.set_grab_moving()
         while self.moving and self.grab_moving == False and not rospy.is_shutdown():
             self.set_grab_moving()
             rospy.loginfo(f'state_find: waiting for belt to stop ({self.moving = } and {self.grab_moving = })')
             time.sleep(0.1)
-        
+
         if self.grab_moving:
             if self.moving:
                 #rospy.loginfo('state_find: going to grab moving')
                 return STATE_GRAB_MOVING
             rospy.loginfo('state_find: waiting for movement')
             return STATE_FIND
-            
+
         rospy.loginfo(f'state_find: selecting box')
         self.desired_id = self.grab_best()
         if not self.desired_id:
@@ -626,12 +625,12 @@ class StateMachine:
             time.sleep(0.5)
             return STATE_FIND
         rospy.loginfo(f'state_find: chose box {self.desired_id}')
-       
+
         # if belt is still for more than 10s, assume 3a
         if (self.last_stopped_time - self.last_moved_time) > 10:
             rospy.loginfo(f'state_find: identified task 3a')
             return STATE_GRAB
-            
+
         # if belt has been still for less than 10s and more than 9s
         # assume 1 or 2 and wait for belt to start moving again
         if (self.last_stopped_time - self.last_moved_time) > 9:
@@ -679,7 +678,7 @@ class StateMachine:
             rospy.loginfo(f'state_grab_moving: failed')
             return alt_state
         rospy.loginfo(f'state_grab_moving: got block (theoretically)')
-        
+
         return STATE_COLOUR
 
     def state_colour(self):

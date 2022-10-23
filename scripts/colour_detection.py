@@ -25,10 +25,10 @@ from std_msgs.msg import Bool, ColorRGBA, String
 
 
 class ColourDetection:
-'''
-This class holds all the functions for colour detection. This includes classifying the 
-colour of the cube and subscribing to other topics.
-'''
+    '''
+    This class holds all the functions for colour detection. This includes classifying the
+    colour of the cube and subscribing to other topics.
+    '''
     def __init__(self, publisher_queue: int = 10) -> None:
         rospy.init_node('colour_detection', anonymous=False)
         self.publisher_queue = publisher_queue
@@ -47,7 +47,7 @@ colour of the cube and subscribing to other topics.
 
         # Get the relative magnitude of each colour component
         cmax = max(rgb); r, g, b = rgb / cmax
-       
+
 
         # Classify the colour
         rospy.loginfo(f'{r = }, {g = }, {b = }')
