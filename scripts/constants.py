@@ -69,6 +69,8 @@ GRAB_TIME = 0.3
 COLOUR_CHECK_TIME = 1
 MAX_BLOCK_AGE = 3
 COLOUR_CHECK_SAMPLES = 10
+PREDICT_TIME = 2
+GRAB_EARLY_TIME = 1
 
 THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
 THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
@@ -83,7 +85,8 @@ STATE_PLACE = 4
 STATE_ERROR = 5
 STATE_TRAP = 6
 STATE_TOSS = 7
-STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss']
+STATE_GRAB_MOVING = 8
+STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss', 'grab_moving']
 
 # ROBOT POSITIONS
 POSITION_IDLE = (L4, 0, L1 + L2 + L3)
@@ -109,7 +112,8 @@ DROPOFF_POSITION = {
 # Other?
 rpm2rad = lambda w: w * np.pi / 30
 
-VELOCITY_AVG_TIME = 0.5  # uses timestamps this many seconds apart to calculate velocity
+#VELOCITY_AVG_TIME = 0.5  # uses timestamps this many seconds apart to calculate velocity
+VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity
 #VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
 OMEGA_THRESHOLD = rpm2rad(0.5) # [rad/s], how fast counts as moving - tradeoff between how slow counts as moving and sensor noise
 TASK3B_THRESHOLD = 1.5 # If the belt stops for less than this time, we are in task 3b

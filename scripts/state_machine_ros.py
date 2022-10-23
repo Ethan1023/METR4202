@@ -29,6 +29,7 @@ from constants import *
 
 
 class Box:
+    # TODO - 2 velocity measures - one across 0.5 sec, other across 2.5 sec
     def __init__(self) -> None:
         self.x = None
         self.y = None
@@ -39,7 +40,7 @@ class Box:
         self.y_hist = []
         self.t_hist = []
 
-        self.angular_velocity = None
+        self.angular_velocity = 0
 
     def update(self, x, y, zrot, timestamp) -> None:
         '''
@@ -60,7 +61,7 @@ class Box:
         '''Updates the apparent velocity using the historical values.'''
         # If we don't have sufficient data, return without calculating
         if self.t_hist[-1] - self.t_hist[0] < VELOCITY_AVG_TIME:
-            self.angular_velocity = None
+            #self.angular_velocity = None
             return
 
         # Remove unnecessarily old values from history
@@ -70,10 +71,30 @@ class Box:
             del self.t_hist[0]
 
         # Calculate velocity
-        v_x = (self.x_hist[-1] - self.x_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
-        v_y = (self.y_hist[-1] - self.y_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
+        #v_x = (self.x_hist[-1] - self.x_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
+        #v_y = (self.y_hist[-1] - self.y_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
 
-        self.angular_velocity = np.linalg.norm([v_x, v_y]) / self.radius
+        self.angular_velocity = self.angvel()
+
+    def angvel(self):
+        if len(self.x_hist) < 2:
+            return 0
+        th_curr = np.arctan2(self.x-BASE_TO_BELT, self.y)
+        th_old = np.arctan2(self.x_hist[0]-BASE_TO_BELT, self.y_hist[0])
+        # TODO - handle wraparound
+        return (th_old - th_curr) / (self.t_hist[-1] - self.t_hist[0])
+
+    def future_pos(self, delta_t):
+        '''
+        Predict box position delta_t seconds in the future
+        '''
+        rospy.loginfo(f'future_pos: angular velocity of block = {self.angular_velocity}')
+        th_f = -delta_t * self.angular_velocity + np.arctan2(self.x-BASE_TO_BELT, self.y)
+        x_future = self.radius * np.sin(th_f) + BASE_TO_BELT
+        y_future = self.radius * np.cos(th_f)
+        rospy.loginfo(f'future_pos: x, prediction = {self.x}, {x_future}')
+        rospy.loginfo(f'future_pos: y, prediction = {self.y}, {y_future}')
+        return x_future, y_future, self.zrot + self.angular_velocity * delta_t
 
 
 class StateMachine:
@@ -114,7 +135,7 @@ class StateMachine:
         # State functions
         self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
                             self.state_colour, self.state_place, self.state_error,\
-                            self.state_trap, self.state_toss)
+                            self.state_trap, self.state_toss, self.state_grab_moving)
         self.desired_id = None    # id of desired box
         self.moving = True        # Track if belt is moving
         self.grab_moving = False  # Track if we want to grab moving
@@ -185,7 +206,7 @@ class StateMachine:
         v_sum = 0; v_count = 0
         for box in self.boxes.values():
             if box.angular_velocity:
-                v_sum += box.angular_velocity
+                v_sum += abs(box.angular_velocity)
                 v_count += 1
         self.omega = v_sum / v_count if v_count else None
 
@@ -331,6 +352,9 @@ class StateMachine:
             #self.camera_stale = True
             rospy.loginfo('run: looping')
             #time.sleep(5)
+            #for box in self.boxes.values():
+            #    box.future_pos(PREDICT_TIME)
+            #time.sleep(1)
             self.loop()
 
     def set_grab_moving(self):
@@ -350,20 +374,20 @@ class StateMachine:
             if self.last_stopping_duration < TASK3B_THRESHOLD:
                 self.grab_moving = True
     
-    def box_distance(self, box: Box) -> float:
+    def box_distance(self, x: float, y: float) -> float:
         '''
         Returns the distance of the given box from the fixed frame.
         '''
-        return np.linalg.norm(np.array([box.x, box.y]))
+        return np.linalg.norm(np.array([x, y]))
 
-    def box_rel_zrot(self, box: Box) -> float:
+    def box_rel_zrot(self, x: float, y: float, zrot: float) -> float:
         '''
         Returns the magnitude of the relative rotation of the given box
         to the end effector in rads.
         '''
-        ang = np.arctan(box.y / box.x)
+        ang = np.arctan(y / x)
         #rospy.loginfo(f'^%& {np.rad2deg(ang) = } deg')
-        return abs(ang - box.zrot)
+        return abs(ang - zrot)
 
     def heuristic_relative_rotation(self, angle: float) -> float:
         '''
@@ -374,33 +398,48 @@ class StateMachine:
         angle = angle % (np.pi/2) # set angle between 0 and 90 deg
         return float('-inf') if np.deg2rad(25) < angle < np.deg2rad(65) else 1
 
-    def grab_best(self) -> str:
+    def grab_best(self, future = False) -> str:
         '''
         Applies various heuristics to determine the ID of the box most
         ideal to pick up.
         '''
         id_scores = []
+       
+        self.box_lock.acquire()
         for box_id in self.boxes:
             box = self.boxes[box_id]
+            if not future:
+                x = box.x
+                y = box.y
+                zrot = box.zrot
+            else:
+                x, y, zrot = box.future_pos(PREDICT_TIME)
             # Distance heuristic inversely scales box distance by max. dist.
-            h_dist = 1 - self.box_distance(box) / 0.31
+            h_dist = 1 - self.box_distance(x, y) / 0.31
             # Relative rotation heuristic scales relative rotation such that
             # multiples of 90 deg scale to 1 and multiples of 45 deg to 0
-            box_zrot = self.box_rel_zrot(box)
+            box_zrot = self.box_rel_zrot(x, y, zrot)
             h_zrot = self.heuristic_relative_rotation(box_zrot)
             id_scores.append((box_id, h_dist + h_zrot))
+        self.box_lock.release()
 
         best_id, best_score = sorted(id_scores, key=lambda t: t[1], reverse=True)[0]
         rospy.loginfo(f'heuristic score: {best_score} for ID={best_id}')
         return best_id if best_score > 0 else None
 
-    def pickup_block(self, box_id: str) -> int:
+    def pickup_block(self, box_id: str, future: bool = False) -> int:
         '''
         Commands joints and end effector to pick up the box with the given ID.
         If 
         '''
         # Get the current coordinates of the desired box
-        box = self.boxes[box_id]; x = box.x; y = box.y
+        box = self.boxes[box_id]
+        if not future:
+            x = box.x; y = box.y
+        else:
+            x, y, _ = box.future_pos(PREDICT_TIME)
+        # Save what time prediction was made at
+        predict_time = time.time()
          
         # Pre-emptively check if it will be possibly to grab
         z = GRABBY_HEIGHT
@@ -416,6 +455,13 @@ class StateMachine:
             return STATE_FIND
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        if future:
+            if time.time() - predict_time > PREDICT_TIME - GRAB_EARLY_TIME:
+                rospy.loginfo('pickup_block: failed to reach block on time')
+                return STATE_RESET
+            # sleep remaining time
+            time.sleep(PREDICT_TIME - (time.time() - predict_time) - GRAB_EARLY_TIME)
+            rospy.loginfo(f'pickup_block: start INTERCEPT after {time.time() - predict_time}s')
         # Move to grab box
         z = GRABBY_HEIGHT
         coords = (x, y, z)
@@ -427,7 +473,8 @@ class StateMachine:
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         # Allow it to stabilise
-        time.sleep(0.2)
+        if not future:
+            time.sleep(0.2)
         # Grab
         self.command_gripper(open_gripper=False)
         time.sleep(GRAB_TIME)
@@ -493,6 +540,13 @@ class StateMachine:
         while self.moving and self.grab_moving == False and not rospy.is_shutdown():
             rospy.loginfo(f'state_find: waiting for belt to stop ({self.moving = })')
             time.sleep(0.1)
+        
+        if self.grab_moving:
+            if self.moving:
+                rospy.loginfo('state_find: going to grab moving')
+                return STATE_GRAB_MOVING
+            rospy.loginfo('state_find: waiting for movement')
+            return STATE_FIND
             
         rospy.loginfo(f'state_find: selecting box')
         self.desired_id = self.grab_best()
@@ -531,6 +585,30 @@ class StateMachine:
         # Advance to the next state
 
         rospy.loginfo(f'state_grab: returning')
+        return STATE_COLOUR
+
+    def state_grab_moving(self):
+        '''
+        Predict where boxes will be in X seconds
+        Select best box in X seconds
+        Move ready to intercept
+        Grab in X seconds
+        go to colour
+        '''
+        rospy.loginfo(f'state_grab_moving: starting')
+        rospy.loginfo(f'state_grab_moving: selecting box')
+        self.desired_id = self.grab_best(future = True)
+        if not self.desired_id:
+            rospy.loginfo(f'state_grab_moving: no suitable box positions')
+            time.sleep(0.5)
+            return STATE_FIND
+        rospy.loginfo(f'state_grab_moving: going for box {self.desired_id}')
+        alt_state = self.pickup_block(self.desired_id, future=True)
+        if alt_state is not None:
+            rospy.loginfo(f'state_grab_moving: failed')
+            return alt_state
+        rospy.loginfo(f'state_grab_moving: got block (theoretically)')
+        
         return STATE_COLOUR
 
     def state_colour(self):

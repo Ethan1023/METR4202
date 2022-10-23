@@ -161,6 +161,7 @@ class JointController:
         else:
             if self.printing:
                 rospy.logdebug(f'Publishing {joint_state.name}, {joint_state.position}')
+        #rospy.loginfo(f'joint_state_publisher: moving')
         self.joint_pub.publish(joint_state)
 
     def error_publisher(self, error):
