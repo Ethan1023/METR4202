@@ -5,6 +5,10 @@ Never go directly from below belt on left side to right side or vise versa
 
 import numpy as np
 
+# Throw?
+TOSS = False
+POWER_LEVEL = 2
+
 # GEOMETRY
 L1 = 0.101
 L2 = 0.2165-L1
@@ -69,8 +73,8 @@ GRAB_TIME = 0.3
 COLOUR_CHECK_TIME = 1
 MAX_BLOCK_AGE = 5
 COLOUR_CHECK_SAMPLES = 10
-PREDICT_TIME = 1
-GRAB_EARLY_TIME = 0
+PREDICT_TIME = 2.5
+GRAB_EARLY_TIME = 1.3
 
 THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
 THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
@@ -86,7 +90,8 @@ STATE_ERROR = 5
 STATE_TRAP = 6
 STATE_TOSS = 7
 STATE_GRAB_MOVING = 8
-STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss', 'grab_moving']
+STATE_FIND_TOSS = 9
+STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss', 'grab_moving', 'find_toss']
 
 # ROBOT POSITIONS
 POSITION_IDLE = (L4, 0, L1 + L2 + L3)
@@ -108,11 +113,18 @@ DROPOFF_POSITION = {
     'yellow': DROPOFF_ZONE[4],
 }
 
+YEET_ANGLE = {
+    'red': np.arctan2(DROPOFF_ZONE[1][1], DROPOFF_ZONE[1][0]),
+    'green': np.arctan2(DROPOFF_ZONE[2][1], DROPOFF_ZONE[2][0]),
+    'blue': np.arctan2(DROPOFF_ZONE[3][1], DROPOFF_ZONE[3][0]),
+    'yellow': np.arctan2(DROPOFF_ZONE[4][1], DROPOFF_ZONE[4][0]),
+}
+
 
 # Other?
 rpm2rad = lambda w: w * np.pi / 30
 
-VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity
+VELOCITY_AVG_TIME = 1.0  # uses timestamps this many seconds apart to calculate velocity
 VELOCITY_DET_TIME = 0.5  # uses timestamps this many seconds apart to detect velocity
 #VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity
 #VELOCITY_THRESHOLD = 0.01   # How fast counts as moving

@@ -4,7 +4,7 @@
   <node pkg="ximea_ros" type="ximea_demo" name="ximea_demo" output="log" respawn="true"/>
 
   <!-- Start box_transform node -->
-  <node pkg="metr4202" type="box_transform.py" name="box_transform" respawn="true"/>
+  <node pkg="metr4202" type="box_transform.py" name="box_transform" output="screen" respawn="true"/>
 
   <!-- Start aruco_detect node -->
   <include file="$(find ximea_ros)/launch/ximea_aruco.launch">
