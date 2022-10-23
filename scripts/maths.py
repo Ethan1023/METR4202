@@ -1,5 +1,9 @@
 import numpy as np
 
+'''
+This script provides the maths for rotational matrices and the yaw angle from quaternion
+'''
+
 def rot(theta, axis):
     '''
     Rotate about axis
