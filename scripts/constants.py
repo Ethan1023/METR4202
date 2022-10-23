@@ -33,7 +33,7 @@ THETA_RANGES = ((-2.5, 2.5), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
 ERROR_TOL_COARSE = 0.5  # get thetas within this angle when moving to a pos
 
-THETA_OFFSET = (-0.01, -0.1, 0, 0.08)  # offset angles to account for strutural sag?
+THETA_OFFSET = (-0.02, -0.1, 0, 0.08)  # offset angles to account for strutural sag?
 RAD_OFFSET = -0.015
 
 # Highly recommend constant gain across joints 2-4 with no offset
@@ -67,10 +67,10 @@ Y_CENTRE = 0
 #TIME CONSTANTS
 GRAB_TIME = 0.3
 COLOUR_CHECK_TIME = 1
-MAX_BLOCK_AGE = 3
+MAX_BLOCK_AGE = 5
 COLOUR_CHECK_SAMPLES = 10
-PREDICT_TIME = 2
-GRAB_EARLY_TIME = 1
+PREDICT_TIME = 1
+GRAB_EARLY_TIME = 0
 
 THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
 THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
@@ -112,8 +112,9 @@ DROPOFF_POSITION = {
 # Other?
 rpm2rad = lambda w: w * np.pi / 30
 
-#VELOCITY_AVG_TIME = 0.5  # uses timestamps this many seconds apart to calculate velocity
 VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity
+VELOCITY_DET_TIME = 0.5  # uses timestamps this many seconds apart to detect velocity
+#VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity
 #VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
 OMEGA_THRESHOLD = rpm2rad(0.5) # [rad/s], how fast counts as moving - tradeoff between how slow counts as moving and sensor noise
 TASK3B_THRESHOLD = 1.5 # If the belt stops for less than this time, we are in task 3b

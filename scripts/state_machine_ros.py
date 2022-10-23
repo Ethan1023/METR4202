@@ -41,6 +41,7 @@ class Box:
         self.t_hist = []
 
         self.angular_velocity = 0
+        self.angular_velocity_coarse = 0
 
     def update(self, x, y, zrot, timestamp) -> None:
         '''
@@ -48,6 +49,7 @@ class Box:
         '''
         self.x = x
         self.y = y
+        rospy.logwarn(f'{x}, {y}')
         self.zrot = zrot
         self.radius = np.sqrt((x - BASE_TO_BELT)**2 + y**2)
 
@@ -60,6 +62,18 @@ class Box:
     def update_apparent_velocity(self) -> None:
         '''Updates the apparent velocity using the historical values.'''
         # If we don't have sufficient data, return without calculating
+        if self.t_hist[-1] - self.t_hist[0] < VELOCITY_DET_TIME:
+            #self.angular_velocity = None
+            return
+
+        indicies = np.where(np.array(self.t_hist) > self.t_hist[-1] - VELOCITY_DET_TIME)[0]
+        if len(indicies) == 0:
+            return
+        coarse_ind = indicies[0]
+        if coarse_ind == len(self.t_hist)-1:
+            return
+        self.angular_velocity_coarse = self.angvel(coarse_ind)
+
         if self.t_hist[-1] - self.t_hist[0] < VELOCITY_AVG_TIME:
             #self.angular_velocity = None
             return
@@ -76,25 +90,33 @@ class Box:
 
         self.angular_velocity = self.angvel()
 
-    def angvel(self):
+    def angvel(self, oldind=0):
         if len(self.x_hist) < 2:
             return 0
         th_curr = np.arctan2(self.x-BASE_TO_BELT, self.y)
-        th_old = np.arctan2(self.x_hist[0]-BASE_TO_BELT, self.y_hist[0])
+        th_old = np.arctan2(self.x_hist[oldind]-BASE_TO_BELT, self.y_hist[oldind])
         # TODO - handle wraparound
-        return (th_old - th_curr) / (self.t_hist[-1] - self.t_hist[0])
-
+        th_diff = np.array([th_curr - th_old, th_curr - th_old - 2*np.pi, th_curr - th_old + 2*np.pi])
+        mindex = np.where(np.abs(th_diff) == np.min(np.abs(th_diff)))[0][0]
+        dt = self.t_hist[-1] - self.t_hist[oldind]
+        if mindex:
+            rospy.logwarn(f'vel = {th_diff[mindex]/dt} NOT {th_diff[0]/dt}')
+        vel = th_diff[mindex] / dt
+        # th_curr = -179, th_old = 179
+        
+            
+        return vel
     def future_pos(self, delta_t):
         '''
         Predict box position delta_t seconds in the future
         '''
         rospy.loginfo(f'future_pos: angular velocity of block = {self.angular_velocity}')
-        th_f = -delta_t * self.angular_velocity + np.arctan2(self.x-BASE_TO_BELT, self.y)
+        th_f = delta_t * self.angular_velocity + np.arctan2(self.x-BASE_TO_BELT, self.y)
         x_future = self.radius * np.sin(th_f) + BASE_TO_BELT
         y_future = self.radius * np.cos(th_f)
         rospy.loginfo(f'future_pos: x, prediction = {self.x}, {x_future}')
         rospy.loginfo(f'future_pos: y, prediction = {self.y}, {y_future}')
-        return x_future, y_future, self.zrot + self.angular_velocity * delta_t
+        return x_future, y_future, self.zrot - self.angular_velocity * delta_t
 
 
 class StateMachine:
@@ -205,8 +227,8 @@ class StateMachine:
         # Average velocity of all boxes for which velocity ahs been calculated
         v_sum = 0; v_count = 0
         for box in self.boxes.values():
-            if box.angular_velocity:
-                v_sum += abs(box.angular_velocity)
+            if box.angular_velocity_coarse:
+                v_sum += abs(box.angular_velocity_coarse)
                 v_count += 1
         self.omega = v_sum / v_count if v_count else None
 
@@ -372,6 +394,8 @@ class StateMachine:
         # last period of stopping was less than X seconds
         else:
             if self.last_stopping_duration < TASK3B_THRESHOLD:
+                self.grab_moving = True
+            if time.time() - self.last_stopped_time > 10:
                 self.grab_moving = True
     
     def box_distance(self, x: float, y: float) -> float:
@@ -552,6 +576,11 @@ class StateMachine:
         self.desired_id = self.grab_best()
         if not self.desired_id:
             rospy.loginfo(f'state_find: no suitable box positions')
+            # if belt is still for more than 10s, assume 3a
+            if (self.last_stopped_time - self.last_moved_time) > 10:
+                self.desired_id = list(self.boxes.keys())[0]
+                rospy.loginfo(f'state_find: identified task 3a, trying bad block')
+                return STATE_GRAB
             time.sleep(0.5)
             return STATE_FIND
         rospy.loginfo(f'state_find: chose box {self.desired_id}')
