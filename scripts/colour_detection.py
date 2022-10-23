@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
 
 '''
-TODO: documentation
+This script subscribes to the "test_colour" topic for colour detection and
+and the "request_colour" topic for incoming detection requests.
+
+When an incoming request is received, the most recently detected colour is
+published to the "box_colour" topic.
+
+It is run by calling:
+$ rosrun metr4202 colour_detection.py
+
+When the script is running, it can be tested in another terminal by the
+built-in test function by running:
+$ rosrun metr4202 colour_detection.py --test
+
+This publishes requests every second and prints the value published in
+response (to the terminal).
 '''
 
 import numpy as np
@@ -23,21 +37,26 @@ class ColourDetection:
         '''
         r = colour.r; g = colour.g; b = colour.b; rgb = np.array([r, g, b])
 
+        # Avoid misclassifying colour due to occasional cv error
+        if any(rgb == 0):
+            return 'other'
+
         # Get the relative magnitude of each colour component
         cmax = max(rgb); r, g, b = rgb / cmax
-        
+       
+
         # Classify the colour
-        print(f'{r = }, {g = }, {b = }')
-        if (r == 1 and g < 0.5 and b < 0.5):
+        rospy.loginfo(f'{r = }, {g = }, {b = }')
+        if (r > 0.95 and g < 0.4 and b < 0.3):
             return 'red'
 
-        if (r < 0.6 and g == 1 and b < 0.5):
+        if (r < 0.55 and g > 0.95 and b < 0.5):
             return 'green'
 
-        if (r < 0.6 and g > 0.8 and b > 0.8):
+        if (r < 0.5 and g > 0.8 and b > 0.95):
             return 'blue'
 
-        if (r > 0.8 and g > 0.8 and b < 0.5):
+        if (r > 0.95 and g > 0.8 and b < 0.4):
             return 'yellow'
 
         return 'other'
@@ -64,7 +83,7 @@ class ColourDetection:
             '''
             self.detected_colour = colour
 
-        rospy.Subscriber('colour_request', Bool, response_callback)
+        rospy.Subscriber('request_colour', Bool, response_callback)
         rospy.Subscriber('test_color', ColorRGBA, update_callback)
         rospy.spin()
 
@@ -87,7 +106,7 @@ class ColourDetection:
         rospy.init_node('test_colour_detection', anonymous=False)
         rospy.Subscriber('box_colour', String, callback)
 
-        publisher = rospy.Publisher('colour_request', Bool, queue_size=1)
+        publisher = rospy.Publisher('request_colour', Bool, queue_size=1)
         request = Bool(); request.data = True
 
         requests_sent = 0

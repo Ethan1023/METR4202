@@ -1,9 +1,6 @@
 import numpy as np
 from constants import GRABBY_HEIGHT, X_CENTRE, Y_CENTRE
 
-def state_detection(box_object, joint_controller_object):
-    pass
-
 def blocks_from_arm(x, y):
     '''
     Calculates the distances (norm) of each of the blocks from the robot base.
@@ -27,7 +24,7 @@ def block_radius(x, y):
     '''
     block_radii = []
 
-    for i in range(len(x))
+    for i in range(len(x)):
         rad = np.hypot((x[i]-X_CENTRE),(y[i]-Y_CENTRE))
         block_radii.append(rad)
     return block_radii
@@ -61,7 +58,3 @@ def grab_pos(x, y):  #matrix in array form
     also takes charge of what block to pick up
     '''
     return np.array([x, y, GRABBY_HEIGHT])
-
-
-def which_state():
-    pass

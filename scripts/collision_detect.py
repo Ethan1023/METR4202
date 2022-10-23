@@ -85,8 +85,8 @@ def avoids_belt(pos):
     x_gripper, y_gripper, z_gripper = pos
 
     #use eqn of a circle to determine if the xy coordinates of the end effector are in the area of the belt
-    xy_belt = (x_gripper < (np.sqrt(belt_rad**2 - y_gripper**2) + BASE_TO_BELT)) and\
-              (x_gripper > (-(np.sqrt(belt_rad**2 - y_gripper**2)) + BASE_TO_BELT))
+    xy_belt = (x_gripper < (np.hypot(belt_rad, y_gripper) + BASE_TO_BELT)) and\
+              (x_gripper > (-(np.hypot(belt_rad, y_gripper)) + BASE_TO_BELT))
     
     if xy_belt and z_gripper < 0: #GRABBY_HEIGHT*0.9: #(z_gripper - H_BLOCK/2) < (H_BLOCK/4):
         return False
@@ -163,7 +163,7 @@ class CollisionHandler:
         '''
         #Gripper height
         if self.z_gripper < -(H_BASE - H_BLOCK/2):
-            #gripper must never be lower than the height of a block on the ground
+        #gripper must never be lower than the height of a block on the ground
             return False        
 
         #Gripper angle

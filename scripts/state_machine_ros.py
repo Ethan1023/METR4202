@@ -1,65 +1,164 @@
 #!/usr/bin/env python3
 
 '''
-TODO: documentation
+Handles general logic. GG.
+
+Run everything together by calling:
+$ roslaunch metr4202 project.launch
+
 '''
 
-import rospy
+import math
 import time
-import numpy as np
 
-from std_msgs.msg import Bool, ColorRGBA, Float32
+from threading import Lock  # Prevent weird behaviour when deleting boxes
+
+import numpy as np
+import rospy
+from collections import Counter  # Obtain mode of colours seen
+
+from std_msgs.msg import Bool, Float32, String
 from sensor_msgs.msg import JointState
-#ColorRGBA = None
-from metr4202.msg import BoxTransformArray, Pos, GripperState  # Custom messages from msg/
+from metr4202.msg import BoxTransformArray, Pos, GripperState, Thetas  # Custom messages from msg/
+
 from inverse_kinematics import inv_kin
-from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
-                      STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
-                      STATE_TOSS, \
-                      L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-                      RAD_OFFSET
-from maths import yaw_from_quat
-from threading import Lock
+from maths import yaw_from_quat  # Yaw angle of block
+
+from constants import *
+
+
+class Box:
+    def __init__(self) -> None:
+        self.x = None
+        self.y = None
+        self.zrot = None
+        self.radius = None
+
+        self.x_hist = []
+        self.y_hist = []
+        self.t_hist = []
+
+        self.angular_velocity = 0
+        self.angular_velocity_coarse = 0
+
+    def update(self, x, y, zrot, timestamp) -> None:
+        '''
+        Updates the current values and history of this box with the new x, y.
+        '''
+        self.x = x
+        self.y = y
+        rospy.logwarn(f'{x}, {y}')
+        self.zrot = zrot
+        self.radius = np.sqrt((x - BASE_TO_BELT)**2 + y**2)
+
+        self.x_hist.append(x)
+        self.y_hist.append(y)
+        self.t_hist.append(timestamp)
+
+        self.update_apparent_velocity()
+
+    def update_apparent_velocity(self) -> None:
+        '''Updates the apparent velocity using the historical values.'''
+        # If we don't have sufficient data, return without calculating
+        if self.t_hist[-1] - self.t_hist[0] < VELOCITY_DET_TIME:
+            #self.angular_velocity = None
+            return
+
+        indicies = np.where(np.array(self.t_hist) > self.t_hist[-1] - VELOCITY_DET_TIME)[0]
+        if len(indicies) == 0:
+            return
+        coarse_ind = indicies[0]
+        if coarse_ind == len(self.t_hist)-1:
+            return
+        self.angular_velocity_coarse = self.angvel(coarse_ind)
+
+        if self.t_hist[-1] - self.t_hist[0] < VELOCITY_AVG_TIME:
+            #self.angular_velocity = None
+            return
+
+        # Remove unnecessarily old values from history
+        while len(self.t_hist) > 2 and self.t_hist[-1] - self.t_hist[1] > VELOCITY_AVG_TIME:
+            del self.x_hist[0]
+            del self.y_hist[0]
+            del self.t_hist[0]
+
+        # Calculate velocity
+        #v_x = (self.x_hist[-1] - self.x_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
+        #v_y = (self.y_hist[-1] - self.y_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
+
+        self.angular_velocity = self.angvel()
+
+    def angvel(self, oldind=0):
+        if len(self.x_hist) < 2:
+            return 0
+        th_curr = np.arctan2(self.x-BASE_TO_BELT, self.y)
+        th_old = np.arctan2(self.x_hist[oldind]-BASE_TO_BELT, self.y_hist[oldind])
+        th_diff = np.array([th_curr - th_old, th_curr - th_old - 2*np.pi, th_curr - th_old + 2*np.pi])
+        mindex = np.where(np.abs(th_diff) == np.min(np.abs(th_diff)))[0][0]
+        dt = self.t_hist[-1] - self.t_hist[oldind]
+        if mindex:
+            rospy.logwarn(f'vel = {th_diff[mindex]/dt} NOT {th_diff[0]/dt}')
+        vel = th_diff[mindex] / dt
+        # th_curr = -179, th_old = 179
+        
+            
+        return vel
+    def future_pos(self, delta_t):
+        '''
+        Predict box position delta_t seconds in the future
+        '''
+        rospy.loginfo(f'future_pos: angular velocity of block = {self.angular_velocity}')
+        th_f = delta_t * self.angular_velocity + np.arctan2(self.x-BASE_TO_BELT, self.y)
+        x_future = self.radius * np.sin(th_f) + BASE_TO_BELT
+        y_future = self.radius * np.cos(th_f)
+        rospy.loginfo(f'future_pos: x, prediction = {self.x}, {x_future}')
+        rospy.loginfo(f'future_pos: y, prediction = {self.y}, {y_future}')
+        return x_future, y_future, self.zrot - self.angular_velocity * delta_t
+
 
 class StateMachine:
-    def __init__(self, dorospy = True):
+    def __init__(self, dorospy: bool = True) -> None:
         self.other_init()
+        rospy.loginfo('StateMachine other init completed')
         if dorospy:
             self.rospy_init()
+        rospy.loginfo('StateMachine rospy init completed')
+        self.state_reset()
         print(f'StateMachine initialised')
+        rospy.loginfo(f'StateMachine initialised')
 
     def other_init(self):
         self.box_lock = Lock()
         #self.theta_stale = True
-        self.printing = True
-        self.camera_stale = True
-        self.position_error = ERROR_TOL*10
-        # Assume joint controller runs faster than camera so no real need to track is position error is stale
-        # TODO - camera input variables
-        self.ids = []
-        self.xs = []
-        self.ys = []
-        self.zrots = []
+        #self.printing = True
+        self.camera_stale = True  # Track is new camera info has been received
+        self.position_error = ERROR_TOL*10  # Initialise position error
 
-        self.x_hist = []  # List of lists of position history
-        self.y_hist = []
-        self.t_hist = []  # List of lists of update times
-        self.x_vels = []  # List of velocities
-        self.y_vels = []
-        self.omegas = []  # list of angular velocities
-        self.radii = []  # list of radii
+        self.boxes = {}  # Dictionary of boxes currently on belt
+
+        #self.x_vels = []  # List of velocities
+        #self.y_vels = []
+        
+        #self.omegas = []  # list of angular velocities
         self.omega = 0    # average angular velocity (0 if not known)
-        self.start_time = time.time()   # update while any blocks are not moving
-        self.stop_time = time.time()    # update while any blocks are moving
-        self.old_stop_time = time.time()
+        self.last_stopped_time = time.time()   # update while any blocks are not moving
+        self.last_moved_time = time.time()    # update while any blocks are moving
+        self.old_stop_time = time.time()      # store previous stopped time
+        self.last_stopping_duration = TASK3B_THRESHOLD*2
 
-        # variables to store current state
+        self.colour_check_time = time.time()  # store when colour check began
+        self.detected_colour = None           # store detected colour
+
+        # Variables to store current state
         self.state = STATE_RESET
+        # State functions
         self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
                             self.state_colour, self.state_place, self.state_error,\
-                            self.state_trap, self.state_toss)
-        self.desired_id = None
-        self.moving = True
+                            self.state_trap, self.state_toss, self.state_grab_moving,\
+                            self.state_find_toss)
+        self.desired_id = None    # id of desired box
+        self.moving = True        # Track if belt is moving
+        self.grab_moving = False  # Track if we want to grab moving
 
     def rospy_init(self):
         # Create node
@@ -70,133 +169,147 @@ class StateMachine:
         self.colour_pub = rospy.Publisher('request_colour', Bool, queue_size=1)
         # Publish to desired joint states for direct access
         self.joint_pub = rospy.Publisher('desired_joint_states', JointState, queue_size=1)
+        # Publish to desired joint angles 
+        self.theta_pub = rospy.Publisher('desired_thetas', Thetas, queue_size=1)
         # Publish to gripper
         self.gripper_pub = rospy.Publisher('gripper_state', GripperState, queue_size=1)
-        # Subscribe to camera - TODO
+        rospy.loginfo('StateMachine publishers initialised')
+        # Subscribe to camera
         rospy.Subscriber('box_transforms', BoxTransformArray, self.camera_callback)
-        # Subscribe to angle error - TODO
+        # Subscribe to angle error
         rospy.Subscriber('position_error', Float32, self.position_error_callback)
         # Subscribe to colour detection
-        rospy.Subscriber('box_colour', ColorRGBA, self.colour_detect_callback)
+        rospy.Subscriber('box_colour', String, self.colour_detect_callback)
+        rospy.loginfo('StateMachine subscribers initialised')
+        
+        #while self.camera_stale and not rospy.is_shutdown():
+        #    # Block operation until camera data received
+        #    time.sleep(0.01)
 
-        while self.camera_stale and not rospy.is_shutdown():
-            # Block operation until camera data received
-            time.sleep(0.01)
-
-    def camera_callback(self, msg):
+    def camera_callback(self, box_transforms: BoxTransformArray) -> None:
+        '''
+        Updates box data when new data from the camera becomes available.
+        '''
+        # Acquire lock on boxes so they are not accessed while being updated
         self.box_lock.acquire()
-        for box_transform in msg.transforms:
+
+        # Define time of camera data
+        timestamp = time.time()
+
+        # Add new boxes or update existing ones from camera data
+        for box_transform in box_transforms.transforms:
             box_id = box_transform.fiducial_id
-            if box_id in self.ids:
-                i = self.ids.index(box_id)
-                self.xs[i] = box_transform.transform.translation.x
-                self.ys[i] = box_transform.transform.translation.y
-                self.zrots[i] = yaw_from_quat(box_transform.transform.rotation)
-                self.radii[i] = np.sqrt((self.xs[i]-BASE_TO_BELT)**2 + self.ys[i]**2)
-                # Update position 'queue'
-                self.x_hist[i].append(self.xs[i])
-                self.y_hist[i].append(self.ys[i])
-                self.t_hist[i].append(time.time())
+            rospy.loginfo(f'x,y,z = {box_transform.transform.translation.x},{box_transform.transform.translation.y},{box_transform.transform.translation.z}')
+
+            # Update existing boxes
+            if box_id in self.boxes:
+
+                box = self.boxes[box_id]
+
+                x = box_transform.transform.translation.x
+                y = box_transform.transform.translation.y
+                zrot = yaw_from_quat(box_transform.transform.rotation)
+
+                box.update(x, y, zrot, timestamp)
+
+            # Add new boxes
             else:
-                print(f'New box found!')
-                self.ids.append(box_id)
-                self.xs.append(box_transform.transform.translation.x)
-                self.ys.append(box_transform.transform.translation.y)
-                self.zrots.append(yaw_from_quat(box_transform.transform.rotation))
-                self.radii.append(np.sqrt((self.xs[-1]-BASE_TO_BELT)**2 + self.ys[-1]**2))
-                # Create 'queue' with new position
-                self.x_hist.append([self.xs[-1]])
-                self.y_hist.append([self.ys[-1]])
-                self.t_hist.append([time.time()])
-                # Velocity is unknown
-                self.x_vels.append(None)
-                self.y_vels.append(None)
-                self.omegas.append(None)
-        # If oldest history >X seconds old, delete (FIFO queue)
-        # Calculate velocity with oldest pos <X sec old and most recent val
-        for i, (t_hist, x_hist, y_hist) in enumerate(zip(self.t_hist, self.x_hist, self.y_hist)):
-            if len(t_hist) > 1:
-                if t_hist[-1] - t_hist[0] > VELOCITY_AVG_TIME:  # if oldest value is old enough
-                    # While second oldest value is old enough, clear oldest
-                    while len(t_hist) > 2 and t_hist[-1] - t_hist[1] > VELOCITY_AVG_TIME:
-                        del x_hist[0]
-                        del y_hist[0]
-                        del t_hist[0]
-                    # Calculate velocities
-                    print(f'{self.x_vels[i]}')
-                    print(f'={self.xs[i]}')
-                    print(f'- {t_hist}')
-                    self.x_vels[i] = (self.xs[i] - x_hist[0]) / (t_hist[-1] - t_hist[0])
-                    self.y_vels[i] = (self.ys[i] - y_hist[0]) / (t_hist[-1] - t_hist[0])
-                    self.omegas[i] = np.sqrt(self.x_vels[i]**2 + self.y_vels[i]**2) / self.radii[i]
-            else:
-                # Set to none if can't track? TODO
-                self.x_vels[i] = None
-                self.y_vels[i] = None
-                self.omegas[i] = None
-        total = 0
-        count = 0
-        for omega in self.omegas:
-            if omega is not None:
-                total += omega
-                count += 1
+                x = box_transform.transform.translation.x
+                y = box_transform.transform.translation.y
+                zrot = yaw_from_quat(box_transform.transform.rotation)
+
+                new_box = Box()
+                new_box.update(x, y, zrot, timestamp)
+                self.boxes[box_id] = new_box
+
+        # Average velocity of all boxes for which velocity ahs been calculated
+        v_sum = 0; v_count = 0
+        for box in self.boxes.values():
+            if box.angular_velocity_coarse:
+                v_sum += abs(box.angular_velocity_coarse)
+                v_count += 1
+        self.omega = v_sum / v_count if v_count else None
+
+        # Release lock on boxes
         self.box_lock.release()
-        if not count == 0:
-            self.omega = total / count
-        else:
-            self.omega = 0
-        # Update timers
-        #maxvel = -1
-        #for x_vel, y_vel in zip(self.x_vels, self.y_vels):
-        #    if x_vel is not None:
-        #        maxvel = max(maxvel, np.sqrt(x_vel**2 + y_vel**2))
-        #if maxvel > VELOCITY_THRESHOLD:
-        if self.omega > OMEGA_THRESHOLD:
-            self.old_stop_time = self.start_time
-            self.stop_time = time.time()
-            self.moving = True
-            print(f'Time since started = {self.stop_time - self.start_time} s')
-        else:
-            self.start_time = time.time()
-            self.moving = False
-            print(f'Time since stopped = {self.start_time - self.stop_time} s')
-        if len(self.ids) > 0:
+
+        # Update instance variables tracking belt start and stop times
+        #self.last_stopping_duration
+        if self.omega:
+            if self.omega > OMEGA_THRESHOLD:
+                    if not self.moving:
+                        # Just started moving
+                        self.last_stopping_duration = time.time() - self.last_moved_time
+                    self.last_moved_time = time.time()  # Last time when it was moving
+                    self.moving = True
+                    rospy.logdebug(f'Time since started = {self.last_moved_time - self.last_stopped_time} s')
+            else:
+                self.last_stopped_time = time.time()  # Last time when it was stopped
+                self.moving = False
+                rospy.logdebug(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
+
+        # Update "stale" status of camera
+        if len(self.boxes) > 0:
             self.camera_stale = False
 
-    def colour_detect_callback(self, data: ColorRGBA) -> None:
+        rospy.loginfo('camera_callback: complete')
+
+    def colour_detect_callback(self, colour: String) -> None:
         '''
         Updates the self.detected_colour variable with the received response.
         '''
-        print(f'colour callback')
-        self.detected_colour = data
+        self.detected_colour = colour.data
 
-    def request_colour(self) -> ColorRGBA:
+    def request_colour(self) -> String:
         '''
         Publishes a request to the "colour_request" topic and subscribes to the
         "box_colour" topic to receive the response. Returns ColorRGBA.
         '''
-        self.detected_colour = None
-        request = Bool(); request.data = True
-        self.colour_pub.publish(request)
-
-        while not self.detected_colour and not rospy.is_shutdown():
-            time.sleep(0.01)
-        return self.detected_colour
+        self.colour_check_time = time.time()  # Time colour request began
+        rospy.loginfo('request_colour: starting')
+        request = Bool(); request.data = True  # Prepare request
+        detected_colours = []  # Store detected colours
+        # Loop until required number of samples required or until timeout
+        while len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME and not rospy.is_shutdown():
+            # rospy.loginfo('request_colour: requesting colour')
+            self.detected_colour = None
+            self.colour_pub.publish(request)
+            while not self.detected_colour and not rospy.is_shutdown():
+                time.sleep(0.01)
+            # It not other, store colour
+            if not self.detected_colour == 'other':
+                detected_colours.append(self.detected_colour)
+        print(detected_colours)
+        # If no colours found, return other
+        if len(detected_colours) == 0:
+            return 'other'
+        # Find most common colour
+        counter = Counter(detected_colours)
+        colour = counter.most_common(n=1)[0][0]
+        rospy.loginfo(f'request_colour: returning {colour}')
+        self.detected_colour = colour
+        return colour
 
     def position_error_callback(self, msg):
-        # TODO - track change in position error to see if robot is still moving
-        # print(f'pos error callback = {msg.data}')
+        # Save error from desired thetas
         self.position_error = msg.data
 
-    def desired_pos_publisher(self, coords, pitch=None, rad_offset=0):
+    def desired_pos_publisher(self, coords, pitch=None, rad_offset=0, dry=False):
         '''
         Accept coords and optional pitch
         Return if command was issued
         if pitch is not supplied, try as straight down as possible
+
+        Parameters:
+        coord - (x, y, z)
+        pitch - radians
+        rad_offset - radius offset
+        dry - dry run (don't do anything, only return if possible)
         '''
         self.position_error = ERROR_TOL*10
         pos = Pos()
         pos.x, pos.y, pos.z = coords
+        # Offset radius
         if not rad_offset == 0:
             rad_orig = np.sqrt(pos.x**2 + pos.y**2)
             rad_new = rad_orig + rad_offset
@@ -205,7 +318,8 @@ class StateMachine:
         if pitch is not None:  # if pitch supplied, try to reach it or fail
             if inv_kin(coords, pitch, self_check=False, check_possible=True):
                 pos.pitch = pitch
-                self.pos_pub.publish(pos)
+                if not dry:
+                    self.pos_pub.publish(pos)
                 return True
             print(f'NOT POSSIBLE')
             return False
@@ -213,48 +327,152 @@ class StateMachine:
             for pitch in np.linspace(-np.pi/2, 0, 10):
                 if inv_kin(coords, pitch, self_check=False, check_possible=True):
                     pos.pitch = pitch
-                    self.pos_pub.publish(pos)
+                    if not dry:
+                        self.pos_pub.publish(pos)
                     return True
             print(f'NOT POSSIBLE')
             return False
 
-    def gripper_publisher(self, open_grip=True):
+    def command_gripper(self, open_gripper: bool = True) -> None:
         '''
-        Open gripper?
+        Publishes a command to the open or grip the gripper. Blocks for a
+        period defined by "GRAB_TIME".
         '''
-        msg = GripperState()
-        msg.open = open_grip
+        msg = GripperState(); msg.open = open_gripper
         self.gripper_pub.publish(msg)
 
     def delete_box(self, box_id):
         self.box_lock.acquire()
-        i = self.ids.index(box_id)
-        del self.ids[i]
-        del self.xs[i]
-        del self.ys[i]
-        del self.zrots[i]
-        del self.radii[i]
-        del self.x_hist[i]
-        del self.y_hist[i]
-        del self.t_hist[i]
-        del self.x_vels[i]
-        del self.y_vels[i]
-        del self.omegas[i]
+        if box_id in self.boxes:
+            del self.boxes[box_id]
         self.box_lock.release()
 
+    def delete_old_boxes(self):
+        '''
+        Delete boxes that haven't been seen in MAX_BLOCK_AGE seconds
+        '''
+        self.box_lock.acquire()
+        curr_time = time.time()
+        dictkeys = list(self.boxes.keys())
+        for box_id in dictkeys:
+            if curr_time - self.boxes[box_id].t_hist[-1] > MAX_BLOCK_AGE:
+                rospy.loginfo(f'delete_old_boxes: deleting {box_id}')
+                del self.boxes[box_id]
+        self.box_lock.release()
+        
+
     def run(self):
+        '''
+        Main loop
+        Call loop until rospy exits
+        '''
         while not rospy.is_shutdown():
             while self.camera_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
             if rospy.is_shutdown():
                 return 0
             #self.camera_stale = True
+            #rospy.loginfo('run: looping')
+            #time.sleep(5)
+            #for box in self.boxes.values():
+            #    box.future_pos(PREDICT_TIME)
+            #time.sleep(1)
             self.loop()
 
-    def pickup_block(self, block_id):
-        i = self.ids.index(block_id)
-        x = self.xs[i]
-        y = self.ys[i]
+    def set_grab_moving(self):
+        '''
+        Decides whether we should pick up a box while the belt is moving or if
+        we should wait for it to stop. Returns True to pick up while moving.
+        '''
+        # If the belt is currently stopped, we can decide to not grab moving
+        # if the belt stopped more than X seconds ago
+        if not self.moving:
+            if time.time() - self.last_moved_time > TASK3B_THRESHOLD:
+                self.grab_moving = False
+
+        # If the belt is currently moving, we can decide to grab moving if the
+        # last period of stopping was less than X seconds
+        else:
+            if self.last_stopping_duration < TASK3B_THRESHOLD:
+                self.grab_moving = True
+            if time.time() - self.last_stopped_time > 10:
+                self.grab_moving = True
+    
+    def box_distance(self, x: float, y: float) -> float:
+        '''
+        Returns the distance of the given box from the fixed frame.
+        '''
+        return np.linalg.norm(np.array([x, y]))
+
+    def box_rel_zrot(self, x: float, y: float, zrot: float) -> float:
+        '''
+        Returns the magnitude of the relative rotation of the given box
+        to the end effector in rads.
+        '''
+        ang = np.arctan(y / x)
+        #rospy.loginfo(f'^%& {np.rad2deg(ang) = } deg')
+        return abs(ang - zrot)
+
+    def heuristic_relative_rotation(self, angle: float) -> float:
+        '''
+        Returns a float between 0 and 1 corresponding to the heuristic
+        score of the given relative rotation angle.
+        '''
+        #rospy.loginfo(f'heuristic angle: {np.rad2deg(angle)} deg')
+        angle = angle % (np.pi/2) # set angle between 0 and 90 deg
+        return float('-inf') if np.deg2rad(25) < angle < np.deg2rad(65) else 1
+
+    def grab_best(self, future = False) -> str:
+        '''
+        Applies various heuristics to determine the ID of the box most
+        ideal to pick up.
+        '''
+        id_scores = []
+       
+        self.box_lock.acquire()
+        for box_id in self.boxes:
+            box = self.boxes[box_id]
+            if not future:
+                x = box.x
+                y = box.y
+                zrot = box.zrot
+            else:
+                x, y, zrot = box.future_pos(PREDICT_TIME)
+            
+            # Distance heuristic inversely scales box distance by max. dist.
+            h_dist = 1 - self.box_distance(x, y) / 0.31
+            # Relative rotation heuristic scales relative rotation such that
+            # multiples of 90 deg scale to 1 and multiples of 45 deg to 0
+            box_zrot = self.box_rel_zrot(x, y, zrot)
+            h_zrot = self.heuristic_relative_rotation(box_zrot)
+            id_scores.append((box_id, h_dist + h_zrot))
+        self.box_lock.release()
+
+        best_id, best_score = sorted(id_scores, key=lambda t: t[1], reverse=True)[0]
+        rospy.loginfo(f'heuristic score: {best_score} for ID={best_id}')
+        return best_id if best_score > 0 else None
+
+    def pickup_block(self, box_id: str, future: bool = False) -> int:
+        '''
+        Commands joints and end effector to pick up the box with the given ID.
+        If 
+        '''
+        # Get the current coordinates of the desired box
+        box = self.boxes[box_id]
+        if not future:
+            x = box.x; y = box.y
+        else:
+            x, y, _ = box.future_pos(PREDICT_TIME)
+        # Save what time prediction was made at
+        predict_time = time.time()
+         
+        # Pre-emptively check if it will be possibly to grab
+        z = GRABBY_HEIGHT
+        coords = (x, y, z)
+        possible_grab = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET, dry=True)
+        if not possible_grab:
+            return STATE_FIND
+        # Move to above box
         z = EMPTY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
@@ -262,21 +480,37 @@ class StateMachine:
             return STATE_FIND
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        if future:
+            #if time.time() - predict_time > PREDICT_TIME - GRAB_EARLY_TIME:
+            #    rospy.loginfo('pickup_block: failed to reach block on time')
+            #    return STATE_RESET
+            # sleep remaining time
+            time.sleep(PREDICT_TIME - (time.time() - predict_time) - GRAB_EARLY_TIME)
+            rospy.loginfo(f'pickup_block: start INTERCEPT after {time.time() - predict_time}s')
+        # Move to grab box
         z = GRABBY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
+        # We already checked it was possible to no need to check
         if not possible:
+            rospy.logwarn('Pre-emptive check failed')
             return STATE_RESET
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
-        time.sleep(0.2)
-        self.gripper_publisher(False)
+        # Allow it to stabilise
+        if not future:
+            time.sleep(0.2)
+        # Grab
+        self.command_gripper(open_gripper=False)
         time.sleep(GRAB_TIME)
+        # Move up
         z = CARRY_HEIGHT
         coords = (x, y, z)
         possible = self.desired_pos_publisher(coords, rad_offset=RAD_OFFSET)
         if not possible:
-            return STATE_RESET
+            return None
+        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+            time.sleep(0.01)
         return None
 
     def loop(self):
@@ -285,111 +519,306 @@ class StateMachine:
         read current state
         use block position and/or position error to change state or issue command to gripper or joint_controller
         '''
-        # do logic
-        # if len(self.ids) == 1:
-        #     state_1(self.xs[0], self.ys[0])
-        print(f"State = {STATE_NAMES[self.state]}")
+        rospy.loginfo(f"State = {STATE_NAMES[self.state]}")
+        # Delete old boxes
+        self.delete_old_boxes()
+        # Act on state and update state
         self.state = self.state_funcs[self.state]()
-        # self.pickup_block(0)
-        # publsh commands if needed
+
+    def move_to(self, coords, pitch: float, rad_offset: int = 0, error_tol: float = ERROR_TOL) -> bool:
+        '''
+        A wrapper around desired_pos_publisher that handles waiting for the
+        end effector to reach the desired position.
+        '''
+        self.desired_pos_publisher(coords, pitch, rad_offset)
+        while self.position_error > error_tol and not rospy.is_shutdown():
+            time.sleep(0.01)
 
     def state_reset(self):
-        # Returns robot to initial position and opens gripper
-        self.gripper_publisher()
-        coords = (L4, 0, L1+L2+L3)
-        self.desired_pos_publisher(coords, 0)
+        '''Moves the robot into the idle position with the gripper open.'''
+        self.command_gripper(open_gripper=True)
+        rospy.loginfo('Gripper commanded open')
+        thetas = Thetas()
+        thetas.thetas = (0, -np.pi/4, np.pi*3/4, np.pi/2)
+        self.position_error = None
+        while self.position_error is None and not rospy.is_shutdown():        
+            self.theta_pub.publish(thetas)
+            time.sleep(0.1)
+        rospy.loginfo('thetas published')
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        rospy.loginfo('finished reset')
+        if TOSS:
+            return STATE_FIND_TOSS
         return STATE_FIND
 
+    def state_find_toss(self):
+        while len(self.boxes) == 0 and not rospy.is_shutdown():
+            time.sleep(1)
+            return STATE_FIND
+        rospy.loginfo(f'state_find_toss: boxes exist')
+
+        while self.moving and not rospy.is_shutdown():
+            rospy.loginfo(f'state_find_toss: waiting for belt to stop ({self.moving = })')
+            time.sleep(0.1)
+
+        rospy.loginfo(f'state_find_toss: selecting box')
+        self.desired_id = self.grab_best()
+        if not self.desired_id:
+            rospy.loginfo(f'state_find_toss: no suitable box positions')
+            # if belt is still for more than 10s, assume 3a
+            if (self.last_stopped_time - self.last_moved_time) > 10:
+                self.desired_id = list(self.boxes.keys())[0]
+                rospy.loginfo(f'state_find: identified task 3a, trying bad block')
+                return STATE_GRAB
+            time.sleep(0.5)
+            return STATE_FIND
+        rospy.loginfo(f'state_find: chose box {self.desired_id}')
+        
+        # if belt is still for more than 10s, assume 3a
+        if (self.last_stopped_time - self.last_moved_time) > 10:
+            rospy.loginfo(f'state_find: identified task 3a')
+            return STATE_GRAB
+            
+        # if belt has been still for less than 10s and more than 9s
+        # assume 1 or 2 and wait for belt to start moving again
+        if (self.last_stopped_time - self.last_moved_time) > 9:
+            rospy.loginfo(f'state_find: sleeping for a second')
+            time.sleep(1)
+            return STATE_FIND
+
+        rospy.loginfo(f'state_find: returning')
+        return STATE_GRAB
+
     def state_find(self):
-        # Locating and choosing which block to pick up
-        # TODO: ADD LOGIC
-        while len(self.ids) == 0 and not rospy.is_shutdown():
-            time.sleep(0.01)
-        self.desired_id = self.ids[0] # TEMPORARY, FIX THIS - TODO
+        '''
+        Sets self.desired_id to the block which should be picked first.
+        '''
+        #rospy.loginfo(f'state_find: starting')
+        while len(self.boxes) == 0 and not rospy.is_shutdown():
+            time.sleep(1)
+            return STATE_FIND
+        rospy.loginfo(f'state_find: boxes exist')
+        
+        rospy.loginfo(f'state_find: {self.grab_moving = }')
+        self.set_grab_moving()
+        while self.moving and self.grab_moving == False and not rospy.is_shutdown():
+            self.set_grab_moving()
+            rospy.loginfo(f'state_find: waiting for belt to stop ({self.moving = } and {self.grab_moving = })')
+            time.sleep(0.1)
+        
+        if self.grab_moving:
+            if self.moving:
+                #rospy.loginfo('state_find: going to grab moving')
+                return STATE_GRAB_MOVING
+            rospy.loginfo('state_find: waiting for movement')
+            return STATE_FIND
+            
+        rospy.loginfo(f'state_find: selecting box')
+        self.desired_id = self.grab_best()
+        if not self.desired_id:
+            rospy.loginfo(f'state_find: no suitable box positions')
+            # if belt is still for more than 10s, assume 3a
+            if (self.last_stopped_time - self.last_moved_time) > 10:
+                self.desired_id = list(self.boxes.keys())[0]
+                rospy.loginfo(f'state_find: identified task 3a, trying bad block')
+                return STATE_GRAB
+            time.sleep(0.5)
+            return STATE_FIND
+        rospy.loginfo(f'state_find: chose box {self.desired_id}')
+       
+        # if belt is still for more than 10s, assume 3a
+        if (self.last_stopped_time - self.last_moved_time) > 10:
+            rospy.loginfo(f'state_find: identified task 3a')
+            return STATE_GRAB
+            
+        # if belt has been still for less than 10s and more than 9s
+        # assume 1 or 2 and wait for belt to start moving again
+        if (self.last_stopped_time - self.last_moved_time) > 9:
+            rospy.loginfo(f'state_find: sleeping for a second')
+            time.sleep(1)
+            return STATE_FIND
+
+        rospy.loginfo(f'state_find: returning')
         return STATE_GRAB
 
     def state_grab(self):
-        # Picking up a block
-        # If fails, open gripper and return to state_find
-        if self.moving:
-            return STATE_GRAB
+        '''
+        Pick up the block with the ID chosen during the previous state.
+        '''
+        rospy.loginfo(f'state_grab: starting')
         alt_state = self.pickup_block(self.desired_id)
         if alt_state is not None:
+            rospy.loginfo(f'state_grab: failed')
             return alt_state
-        return STATE_TOSS
+        rospy.loginfo(f'state_grab: got block')
+
+        # Advance to the next state
+
+        rospy.loginfo(f'state_grab: returning')
+        return STATE_COLOUR
+
+    def state_grab_moving(self):
+        '''
+        Predict where boxes will be in X seconds
+        Select best box in X seconds
+        Move ready to intercept
+        Grab in X seconds
+        go to colour
+        '''
+        rospy.loginfo(f'state_grab_moving: starting')
+        rospy.loginfo(f'state_grab_moving: selecting box')
+        self.desired_id = self.grab_best(future = True)
+        if not self.desired_id:
+            rospy.loginfo(f'state_grab_moving: no suitable box positions')
+            time.sleep(0.5)
+            return STATE_FIND
+        rospy.loginfo(f'state_grab_moving: going for box {self.desired_id}')
+        alt_state = self.pickup_block(self.desired_id, future=True)
+        if alt_state is not None:
+            rospy.loginfo(f'state_grab_moving: failed')
+            return alt_state
+        rospy.loginfo(f'state_grab_moving: got block (theoretically)')
+        
+        return STATE_COLOUR
+
+    def state_colour(self):
+        '''
+        Move end effector into position to detect the colour of any block
+        (or none if no block was picked up). Sets the detected block
+        colour as an instance variable and moves to the next state.
+        '''
+        # Checking the block colour
+        # If fails, open gripper and return to state_find
+        coords = POSITION_COLOUR_DETECT
+        self.move_to(coords, pitch=np.deg2rad(60))
+
+        detected_colour = self.request_colour()
+
+        if detected_colour == 'other':
+            return STATE_RESET
+
+        if TOSS:
+            return STATE_TOSS
+
+        return STATE_PLACE
+
+    def state_place(self) -> None:
+        '''
+        Move the end effector from the colour detection pose to the drop-off
+        zone corresponding to the desired colour.
+        '''
+        # Get the x, y coords of the desired drop-off zone
+        coords = DROPOFF_POSITION[self.detected_colour]
+
+        # To avoid collision, from the colour detection pose first rotate the
+        # base to the x, y coordinate of the desired drop-off zone
+        #p = np.array(coords)
+        #x, y = np.linalg.norm([0.1, 0.1]) / np.linalg.norm(p) * p
+        #coords = (x, y, CARRY_HEIGHT)
+        coords = (coords[0], coords[1], CARRY_HEIGHT)
+        # coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT)
+        self.move_to(coords, pitch=-np.pi/2, error_tol=ERROR_TOL_COARSE)
+
+        # Move end-effector directly down to place the block
+        coords = (coords[0], coords[1], DROPOFF_HEIGHT)
+        self.move_to(coords, pitch=-np.pi/2)
+
+        # Release the block
+        time.sleep(0.3)
+        self.command_gripper(open_gripper=True)
+        time.sleep(GRAB_TIME)
+
+        # # Move the arm back up slightly before returning to reset position
+        # coords = (coords[0], coords[1], CARRY_HEIGHT)
+        # self.move_to(coords, pitch=-np.pi/2)
+
+        # Delete the box from tracked boxes
+        self.delete_box(self.desired_id)
+
+        # Return to reset state
+        return STATE_RESET
+
+    def state_toss(self):
+        base_angle = YEET_ANGLE[self.detected_colour] + np.pi
+        if base_angle > np.pi:
+            base_angle -= 2*np.pi
+        if POWER_LEVEL == 0:
+            thetas = Thetas()
+            thetas.thetas = (base_angle , 0, 0, np.pi/2)
+            self.position_error = ERROR_TOL*10
+            self.theta_pub.publish(thetas)
+            while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+                time.sleep(0.01)
+            joint_state = JointState()
+            joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+            joint_state.position = (base_angle , 0, 0, 0)
+            joint_state.velocity = (5, 5, 5, 10)
+            self.joint_pub.publish(joint_state)
+            time.sleep(0.3)
+            self.command_gripper(open_gripper=True)
+            time.sleep(0.5)
+        elif POWER_LEVEL == 1:
+            thetas = Thetas()
+            thetas.thetas = (base_angle , 0, np.pi/2, np.pi/2)
+            self.position_error = ERROR_TOL*10
+            self.theta_pub.publish(thetas)
+            while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+                time.sleep(0.01)
+            joint_state = JointState()
+            joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+            joint_state.position = (base_angle , 0, 0, 0)
+            joint_state.velocity = (5, 5, 10, 10)
+            self.joint_pub.publish(joint_state)
+            time.sleep(0.23)
+            self.command_gripper(open_gripper=True)
+            time.sleep(0.5)
+        elif POWER_LEVEL == 2:
+            thetas = Thetas()
+            thetas.thetas = (base_angle , np.deg2rad(70), 0, np.pi/2)
+            self.position_error = ERROR_TOL*10
+            self.theta_pub.publish(thetas)
+            while self.position_error > ERROR_TOL and not rospy.is_shutdown():
+                time.sleep(0.01)
+            joint_state = JointState()
+            joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+            joint_state.position = (base_angle , 0, 0, np.pi/2)
+            joint_state.velocity = (10, 10, 10, 10)
+            self.joint_pub.publish(joint_state)
+            time.sleep(0.15)
+            joint_state = JointState()
+            joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+            joint_state.position = (base_angle , 0, 0, 0)
+            joint_state.velocity = (10, 10, 10, 10)
+            self.joint_pub.publish(joint_state)
+            time.sleep(0.15)
+            self.command_gripper(open_gripper=True)
+            time.sleep(0.05)
+            joint_state = JointState()
+            joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+            joint_state.position = (base_angle , -np.pi/4, 0, 0)
+            joint_state.velocity = (2, 2, 2, 2)
+            self.joint_pub.publish(joint_state)
+            time.sleep(0.5)
+
+        joint_state = JointState()
+        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
+        joint_state.position = (0, 0, 0, np.pi/2)
+        joint_state.velocity = (1, 1, 1, 1)
+        self.joint_pub.publish(joint_state)
+
+        time.sleep(2)
+        self.delete_box(self.desired_id)
+        return STATE_RESET
+
+    def state_error(self):
+        # If called, open gripper and go to state_reset
+        self.command_gripper(open_gripper=True)
+        return STATE_RESET
 
     def state_trap(self):
         return STATE_TRAP
 
-    def state_colour(self):
-        # Checking the block colour
-        # If fails, open gripper and return to state_find
-        coords = (BASE_TO_BELT, 0, 0.2) # TODO - get position
-        pitch = 0
-        self.desired_pos_publisher(coords, pitch)
-        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
-            time.sleep(0.01)
-        print(f'Requestself.desired_idlour')
-        self.request_colour()
-        print(f'Colour = {self.detected_colour}')
-        return STATE_COLOUR # TEMPORARY, FIX THIS - TODO
-
-    def state_place(self):
-        # Get destination from state_colour
-        # Checking id list until the block arrives at that destination
-        # If block appears back in the id/pos list, go to state_find
-        # Once position error is low enough, put block down then return to state_reset
-        # TODO - create dictionary of tuples within constants file for colours which returns xy
-        # TODO - get z values
-        x, y = PLACE_DICT[self.detected_colour]
-        z = None
-        coords = (x, y, z)
-        self.desired_pos_publisher(coords)
-        while self.position_error > ERROR_TOL:
-            time.sleep(0.01)
-        z = None
-        coords = (x, y, z)
-        self.desired_pos_publisher(coords)
-        while self.position_error > ERROR_TOL:
-            time.sleep(0.01)
-        self.gripper_publisher(True)
-        time.sleep(GRAB_TIME)
-        z = None
-        coords = (x, y, z)
-        self.desired_pos_publisher(coords)
-        return STATE_RESET
-
-    def state_toss(self):
-        coords = (L4, 0, L1+L2+L3)
-        self.desired_pos_publisher(coords, 0)
-        while self.position_error > ERROR_TOL and not rospy.is_shutdown():
-            time.sleep(0.01)
-
-        joint_state = JointState()
-        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        joint_state.position = (0, 0, 0, 0)
-        joint_state.velocity = (5, 5, 5, 10)
-        self.joint_pub.publish(joint_state)
-        time.sleep(0.3)
-        self.gripper_publisher(True)
-        time.sleep(0.5)
-        joint_state = JointState()
-        joint_state.name = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        joint_state.position = (0, 0, 0, np.pi/2)
-        joint_state.velocity = (5, 5, 5, 10)
-        self.joint_pub.publish(joint_state)
-
-        time.sleep(1)
-        self.delete_box(self.desired_id)
-        return STATE_RESET
-        
-
-    def state_error(self):
-        # If called, open gripper and go to state_reset
-        self.gripper_publisher()
-        return STATE_RESET
 
 if __name__ == '__main__':
     # Create ROS node
