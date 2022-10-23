@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
 
 '''
-TODO: documentation
+This script subscribes to the "test_colour" topic for colour detection and
+and the "request_colour" topic for incoming detection requests.
+
+When an incoming request is received, the most recently detected colour is
+published to the "box_colour" topic.
+
+It is run by calling:
+$ rosrun metr4202 colour_detection.py
+
+When the script is running, it can be tested in another terminal by the
+built-in test function by running:
+$ rosrun metr4202 colour_detection.py --test
+
+This publishes requests every second and prints the value published in
+response (to the terminal).
 '''
 
 import numpy as np

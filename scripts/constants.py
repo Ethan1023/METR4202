@@ -76,9 +76,9 @@ COLOUR_CHECK_SAMPLES = 10
 PREDICT_TIME = 2.5
 GRAB_EARLY_TIME = 1.3
 
-THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible - TODO
-THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates - TODO
-RADIUS_FENCE = 0.14  # If larger than this radius, fence colliusions should be impossible - TODO
+THETA_BELT = 0.7  # If theta1 is outside of this range, belt collision should be impossible
+THETA_FENCE = 1  # If theta1 will cross this range, fence collision avoidance will activates
+RADIUS_FENCE = 0.14  # If larger than this radius, fence collisions should be impossible
 
 #STATE CONSTANTS
 STATE_RESET = 0

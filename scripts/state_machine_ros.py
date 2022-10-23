@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
 '''
-TODO: documentation
+Handles general logic. GG.
+
+Run everything together by calling:
+$ roslaunch metr4202 project.launch
+
 '''
 
 import math
@@ -18,18 +22,12 @@ from sensor_msgs.msg import JointState
 from metr4202.msg import BoxTransformArray, Pos, GripperState, Thetas  # Custom messages from msg/
 
 from inverse_kinematics import inv_kin
-# from constants import EMPTY_HEIGHT, GRABBY_HEIGHT, CARRY_HEIGHT, ERROR_TOL, GRAB_TIME, \
-#                       STATE_RESET, STATE_FIND, STATE_GRAB, STATE_COLOUR, STATE_PLACE, STATE_ERROR, STATE_TRAP, \
-#                       STATE_TOSS, \
-#                       L1, L2, L3, L4, PLACE_DICT, VELOCITY_AVG_TIME, OMEGA_THRESHOLD, BASE_TO_BELT, STATE_NAMES, \
-#                       RAD_OFFSET, H_BLOCK, COLOUR_CHECK_TIME, MAX_BLOCK_AGE
 from maths import yaw_from_quat  # Yaw angle of block
 
 from constants import *
 
 
 class Box:
-    # TODO - 2 velocity measures - one across 0.5 sec, other across 2.5 sec
     def __init__(self) -> None:
         self.x = None
         self.y = None
@@ -95,7 +93,6 @@ class Box:
             return 0
         th_curr = np.arctan2(self.x-BASE_TO_BELT, self.y)
         th_old = np.arctan2(self.x_hist[oldind]-BASE_TO_BELT, self.y_hist[oldind])
-        # TODO - handle wraparound
         th_diff = np.array([th_curr - th_old, th_curr - th_old - 2*np.pi, th_curr - th_old + 2*np.pi])
         mindex = np.where(np.abs(th_diff) == np.min(np.abs(th_diff)))[0][0]
         dt = self.t_hist[-1] - self.t_hist[oldind]
@@ -191,7 +188,7 @@ class StateMachine:
 
     def camera_callback(self, box_transforms: BoxTransformArray) -> None:
         '''
-        TODO: documentation
+        Updates box data when new data from the camera becomes available.
         '''
         # Acquire lock on boxes so they are not accessed while being updated
         self.box_lock.acquire()
@@ -687,7 +684,9 @@ class StateMachine:
 
     def state_colour(self):
         '''
-        TODO: documentation
+        Move end effector into position to detect the colour of any block
+        (or none if no block was picked up). Sets the detected block
+        colour as an instance variable and moves to the next state.
         '''
         # Checking the block colour
         # If fails, open gripper and return to state_find
