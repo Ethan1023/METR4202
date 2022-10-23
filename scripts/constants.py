@@ -33,7 +33,7 @@ THETA_RANGES = ((-2.5, 2.5), (-1.5708, 1.5708), (-1.9, 2.4), (-1.9, 1.9))
 ERROR_TOL = 0.1  # get thetas within this angle when moving to a pos
 ERROR_TOL_COARSE = 0.5  # get thetas within this angle when moving to a pos
 
-THETA_OFFSET = (-0.01, -0.15, 0, 0.08)  # offset angles to account for strutural sag?
+THETA_OFFSET = (-0.01, -0.1, 0, 0.08)  # offset angles to account for strutural sag?
 RAD_OFFSET = -0.015
 
 # Highly recommend constant gain across joints 2-4 with no offset
@@ -87,7 +87,7 @@ STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'tos
 
 # ROBOT POSITIONS
 POSITION_IDLE = (L4, 0, L1 + L2 + L3)
-POSITION_COLOUR_DETECT = (BASE_TO_BELT + 0.01, 0, COLOUR_DETECT_HEIGHT)
+POSITION_COLOUR_DETECT = (BASE_TO_BELT + 0.02, 0, COLOUR_DETECT_HEIGHT)
 POSITION_INTERMEDIATE = (0.1, 0, 0.12)
 
 # BLOCK DROPOFF ZONES

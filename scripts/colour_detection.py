@@ -23,21 +23,26 @@ class ColourDetection:
         '''
         r = colour.r; g = colour.g; b = colour.b; rgb = np.array([r, g, b])
 
+        # Avoid misclassifying colour due to occasional cv error
+        if any(rgb == 0):
+            return 'other'
+
         # Get the relative magnitude of each colour component
         cmax = max(rgb); r, g, b = rgb / cmax
-        
+       
+
         # Classify the colour
-        print(f'{r = }, {g = }, {b = }')
-        if (r == 1 and g < 0.5 and b < 0.5):
+        rospy.loginfo(f'{r = }, {g = }, {b = }')
+        if (r > 0.95 and g < 0.4 and b < 0.3):
             return 'red'
 
-        if (r < 0.6 and g == 1 and b < 0.5):
+        if (r < 0.55 and g > 0.95 and b < 0.5):
             return 'green'
 
-        if (r < 0.6 and g > 0.8 and b > 0.8):
+        if (r < 0.5 and g > 0.8 and b > 0.95):
             return 'blue'
 
-        if (r > 0.8 and g > 0.8 and b < 0.5):
+        if (r > 0.95 and g > 0.8 and b < 0.4):
             return 'yellow'
 
         return 'other'

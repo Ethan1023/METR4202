@@ -140,8 +140,6 @@ class StateMachine:
         rospy.Subscriber('box_colour', String, self.colour_detect_callback)
         rospy.loginfo('StateMachine subscribers initialised')
         
-        # Reset immediately
-
         #while self.camera_stale and not rospy.is_shutdown():
         #    # Block operation until camera data received
         #    time.sleep(0.01)
@@ -194,15 +192,14 @@ class StateMachine:
         self.box_lock.release()
 
         # Update instance variables tracking belt start and stop times
-        if self.omega:
-            if self.omega > OMEGA_THRESHOLD:
+        if self.omega and self.omega > OMEGA_THRESHOLD:
                 self.last_moved_time = time.time()
                 self.moving = True
                 rospy.logdebug(f'Time since started = {self.last_moved_time - self.last_stopped_time} s')
-            else:
-                self.last_stopped_time = time.time()
-                self.moving = False
-                rospy.logdebug(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
+        else:
+            self.last_stopped_time = time.time()
+            self.moving = False
+            rospy.logdebug(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
 
         # Update "stale" status of camera
         if len(self.boxes) > 0:
@@ -462,12 +459,17 @@ class StateMachine:
     def state_reset(self):
         '''Moves the robot into the idle position with the gripper open.'''
         self.command_gripper(open_gripper=True)
+        rospy.loginfo('Gripper commanded open')
         thetas = Thetas()
         thetas.thetas = (0, -np.pi/4, np.pi*3/4, np.pi/2)
-        self.position_error = ERROR_TOL*10
-        self.theta_pub.publish(thetas)
+        self.position_error = None
+        while self.position_error is None:        
+            self.theta_pub.publish(thetas)
+            time.sleep(0.1)
+        rospy.loginfo('thetas published')
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
+        rospy.loginfo('finished reset')
         return STATE_FIND
 
     def state_find(self):
@@ -480,9 +482,9 @@ class StateMachine:
             return STATE_FIND
         rospy.loginfo(f'state_find: boxes exist')
 
-        #while self.moving and self.grab_moving == False:
-        #    rospy.loginfo(f'state_find: waiting for belt to stop')
-        #    time.sleep(0.5)
+        while self.moving and self.grab_moving == False and not rospy.is_shutdown():
+            rospy.loginfo(f'state_find: waiting for belt to stop ({self.moving = })')
+            time.sleep(0.1)
             
         rospy.loginfo(f'state_find: selecting box')
         self.desired_id = self.grab_best()
@@ -530,7 +532,7 @@ class StateMachine:
         # Checking the block colour
         # If fails, open gripper and return to state_find
         coords = POSITION_COLOUR_DETECT
-        self.move_to(coords, pitch=np.pi/6)
+        self.move_to(coords, pitch=np.deg2rad(60))
 
         detected_colour = self.request_colour()
 
