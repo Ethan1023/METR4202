@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 '''
-Handles general logic. GG.
+Handles general logic.
 
 Run everything together by calling:
 $ roslaunch metr4202 project.launch

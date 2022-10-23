@@ -35,6 +35,11 @@ from constants import T_CAMERA_TO_FIXED
 
 
 class BoxTransform:
+'''
+This class holds all the functions that subscribe to the fiducial transforms topic of
+the ArUco tag detection library and publishes to the box transforms topic. It
+also converts the ArUco tag values to messages.
+'''
     def __init__(self, publisher_queue: int = 10) -> None:
         rospy.init_node('box_detection', anonymous=False)
         self.publisher_queue = publisher_queue

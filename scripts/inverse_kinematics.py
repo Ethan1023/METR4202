@@ -1,7 +1,14 @@
 import numpy as np
 from constants import L1, L2, L3, L4
 
+'''
+This script contains all the maths and calcualtions for inverse kinematics of the end effector of the robot arm.
+'''
+
 def main():
+'''
+Main debugging function
+'''
     coords = np.array([-2, 0, 2])
     pitch = 0*np.pi/180
     print(inv_kin(coords, pitch, True))

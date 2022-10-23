@@ -1,11 +1,12 @@
 '''
-Rules for state machine - figured I might put some here based on assumptions made in collision detect
-Never go directly from below belt on left side to right side or vise versa
+This script holds all the constants used in every script. Some assumptions made in collision detect
+include that the robot never goes directly from below the belt on the left side to the right side or
+vice versa.
 '''
 
 import numpy as np
 
-# Throw?
+# THROW
 TOSS = False
 POWER_LEVEL = 2
 
@@ -121,9 +122,10 @@ YEET_ANGLE = {
 }
 
 
-# Other?
+# RPM TO RADIANS
 rpm2rad = lambda w: w * np.pi / 30
 
+# VELOCITY AND TASK 3 CONSTANTS
 VELOCITY_AVG_TIME = 1.0  # uses timestamps this many seconds apart to calculate velocity
 VELOCITY_DET_TIME = 0.5  # uses timestamps this many seconds apart to detect velocity
 #VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity

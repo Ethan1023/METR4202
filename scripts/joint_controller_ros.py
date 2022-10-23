@@ -25,7 +25,6 @@ class JointController:
     '''
     Publish to desired_joint_state
     Subscribe to joint_states
-    Implement as action?
     '''
     def __init__(self):
         self.other_init()
@@ -33,6 +32,9 @@ class JointController:
         rospy.loginfo(f'JointController initialised')
    
     def rospy_init(self):
+        '''
+        Subscribes and publishes to various nodes
+        '''
         # Create node
         rospy.init_node('joint_controller', anonymous=False)
         # Publish to desired joint states
@@ -51,6 +53,9 @@ class JointController:
             time.sleep(0.01)
     
     def other_init(self):
+        '''
+        Sets variables
+        '''
         self.theta_stale = True
         self.pos_stale = True
         self.ang_stale = True
@@ -76,6 +81,9 @@ class JointController:
         self.ERROR = False
 
     def run(self):
+    '''
+    Runs the gripper
+    '''
         while not rospy.is_shutdown():
             while self.pos_stale and self.ang_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
@@ -89,6 +97,10 @@ class JointController:
                 self.go_to_thetas(self.desired_thetas)
 
     def end_pos_callback(self, pos):
+    '''
+    Sets desired coordinates and pitch to new values.
+    Sets variable pos_stale to False
+    '''
         self.desired_coords = np.array([pos.x, pos.y, pos.z])
         self.desired_pitch = pos.pitch
         self.pos_stale = False
@@ -165,6 +177,9 @@ class JointController:
         self.joint_pub.publish(joint_state)
 
     def error_publisher(self, error):
+    '''
+    Publishes error message
+    '''
         error_msg = Float32()
         error_msg.data = error
         self.error_pub.publish(error_msg)
@@ -185,7 +200,7 @@ class JointController:
 
     def go_to_pos(self, desired_coords, desired_pitch, gain=None, offset=None):
         '''
-        Use gain to set vel?
+        Sets arm to desired position
         '''
         rospy.loginfo(f'got_pos({desired_coords}, {desired_pitch})')
         if gain is None:
@@ -272,7 +287,7 @@ class JointController:
 
     def go_to_thetas(self, desired_thetas, gain=None, offset=None):
         '''
-        Use gain to set vel?
+        Sets joints to desired angles
         '''
         rospy.loginfo(f'go_to_angles({desired_thetas})')
         if gain is None:
@@ -315,6 +330,9 @@ class JointController:
         return True
 
 def main():
+'''
+Main debugging function
+'''
     # Create ROS node
     jc = JointController()
     # Prevent python from exiting

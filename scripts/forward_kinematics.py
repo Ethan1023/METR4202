@@ -3,6 +3,10 @@ from modern_robotics import RpToTrans, VecTose3, MatrixExp6, TransToRp, Adjoint
 from constants import L1, L2, L3, L4
 from inverse_kinematics import atan2
 
+'''
+This script contains all the maths for the forward kinematics used in the inverse kinematics code.
+'''
+
 def main():
     pi = np.pi
     thetas = np.array([pi/2, pi/2, 0, 0])

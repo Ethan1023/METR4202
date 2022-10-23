@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 '''
-TODO: documentation
+This script contains all of the necessary functions used for subscribing to the gripper_state
+topic and setting the gripper open and close positions.
 '''
 
 import pigpio
@@ -11,7 +12,10 @@ from metr4202.msg import GripperState
 
 
 class GripperController:
-
+'''
+This class contains all of the necessary functions used for subscribing to the gripper_state
+topic and setting the gripper open and close positions.
+'''
     # Define servo positions corresponding to gripper states
     position = {
         False: 1315, # grip - default 1375

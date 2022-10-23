@@ -1,11 +1,15 @@
 import numpy as np
 from constants import H_BLOCK, H_BASE, RAD_BELT, H_FENCE, W_FENCE, L_FENCE, L_BASE, W_BASE, BASE_TO_BELT, BASE_TO_FENCE, THETA_BELT, THETA_FENCE, RADIUS_FENCE, GRABBY_HEIGHT
+'''
+This script contains the functions that are used in collision_detect_ros.py to assist the robot's
+collision handling.
+'''
 
 
 def modify_path(current_pos, desired_pos, printing=True):
     '''
-    Accepts current and desired positions
-    Returns modified desired position to avoid collisions
+    Accepts current and desired positions (as an array)
+    Returns modified desired position to avoid collisions (as an array)
     '''
     # TODO - modify combos that are likely to result in a collision
     des_coords, des_pitch = desired_pos
@@ -78,6 +82,7 @@ def modify_path(current_pos, desired_pos, printing=True):
 
 def avoids_belt(pos):
     '''
+    Takes desired end effector position.
     Checks if the end effector position will result in a collision with the belt.
     Returns: True if no collision, False if collision
     '''
@@ -96,7 +101,6 @@ def avoids_belt(pos):
 class CollisionHandler:
     '''
     Detects whether the desired end effector position will result in a collision
-
     '''
     def __init__(self, desired_coords, desired_pitch):
         self.update(desired_coords, desired_pitch)

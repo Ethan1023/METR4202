@@ -22,4 +22,7 @@ def rot(theta, axis):
                          [0,              0,              1]])
 
 def yaw_from_quat(quat):
+    '''
+    Provides yaw angle from quaternion
+    '''
     return np.arctan2(2*(quat.w*quat.z + quat.x*quat.y), 1-2*(quat.y**2+quat.z**2))
