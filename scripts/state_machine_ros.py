@@ -104,6 +104,7 @@ class StateMachine:
         self.last_stopped_time = time.time()   # update while any blocks are not moving
         self.last_moved_time = time.time()    # update while any blocks are moving
         self.old_stop_time = time.time()      # store previous stopped time
+        self.last_stopping_duration = TASK3B_THRESHOLD*2
 
         self.colour_check_time = time.time()  # store when colour check began
         self.detected_colour = None           # store detected colour
@@ -192,14 +193,19 @@ class StateMachine:
         self.box_lock.release()
 
         # Update instance variables tracking belt start and stop times
-        if self.omega and self.omega > OMEGA_THRESHOLD:
-                self.last_moved_time = time.time()
-                self.moving = True
-                rospy.logdebug(f'Time since started = {self.last_moved_time - self.last_stopped_time} s')
-        else:
-            self.last_stopped_time = time.time()
-            self.moving = False
-            rospy.logdebug(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
+        #self.last_stopping_duration
+        if self.omega:
+            if self.omega > OMEGA_THRESHOLD:
+                    if not self.moving:
+                        # Just started moving
+                        self.last_stopping_duration = time.time() - self.last_moved_time
+                    self.last_moved_time = time.time()  # Last time when it was moving
+                    self.moving = True
+                    rospy.logdebug(f'Time since started = {self.last_moved_time - self.last_stopped_time} s')
+            else:
+                self.last_stopped_time = time.time()  # Last time when it was stopped
+                self.moving = False
+                rospy.logdebug(f'Time since stopped = {self.last_stopped_time - self.last_moved_time} s')
 
         # Update "stale" status of camera
         if len(self.boxes) > 0:
@@ -221,7 +227,7 @@ class StateMachine:
         request = Bool(); request.data = True  # Prepare request
         detected_colours = []  # Store detected colours
         # Loop until required number of samples required or until timeout
-        while len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME:
+        while len(detected_colours)<COLOUR_CHECK_SAMPLES and time.time() - self.colour_check_time < COLOUR_CHECK_TIME and not rospy.is_shutdown():
             # rospy.loginfo('request_colour: requesting colour')
             self.detected_colour = None
             self.colour_pub.publish(request)
@@ -327,7 +333,7 @@ class StateMachine:
             #time.sleep(5)
             self.loop()
 
-    def grab_moving(self):
+    def set_grab_moving(self):
         '''
         Decides whether we should pick up a box while the belt is moving or if
         we should wait for it to stop. Returns True to pick up while moving.
@@ -463,7 +469,7 @@ class StateMachine:
         thetas = Thetas()
         thetas.thetas = (0, -np.pi/4, np.pi*3/4, np.pi/2)
         self.position_error = None
-        while self.position_error is None:        
+        while self.position_error is None and not rospy.is_shutdown():        
             self.theta_pub.publish(thetas)
             time.sleep(0.1)
         rospy.loginfo('thetas published')
@@ -482,6 +488,8 @@ class StateMachine:
             return STATE_FIND
         rospy.loginfo(f'state_find: boxes exist')
 
+        self.set_grab_moving()
+        rospy.loginfo(f'state_find: {self.grab_moving = }')
         while self.moving and self.grab_moving == False and not rospy.is_shutdown():
             rospy.loginfo(f'state_find: waiting for belt to stop ({self.moving = })')
             time.sleep(0.1)
