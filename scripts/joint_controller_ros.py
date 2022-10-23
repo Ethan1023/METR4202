@@ -81,9 +81,9 @@ class JointController:
         self.ERROR = False
 
     def run(self):
-    '''
-    Runs the gripper
-    '''
+        '''
+        Runs the gripper
+        '''
         while not rospy.is_shutdown():
             while self.pos_stale and self.ang_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
@@ -97,19 +97,24 @@ class JointController:
                 self.go_to_thetas(self.desired_thetas)
 
     def end_pos_callback(self, pos):
-    '''
-    Sets desired coordinates and pitch to new values.
-    Sets variable pos_stale to False
-    '''
+        '''
+        Sets desired coordinates and pitch to new coordinates
+        '''
         self.desired_coords = np.array([pos.x, pos.y, pos.z])
         self.desired_pitch = pos.pitch
         self.pos_stale = False
 
     def desired_theta_callback(self, ang):
+        '''
+        Sets the desired theta values
+        '''
         self.desired_thetas = np.array(ang.thetas)
         self.ang_stale = False
 
     def end_pose_callback(self, pose):
+        '''
+        Sets the desired end effector coordinates
+        '''
         self.desired_coords = np.array([pose.position.x, pose.position.y, pose.position.z])
         self.desired_pitch = -np.pi/2
         self.pos_stale = False
@@ -173,13 +178,12 @@ class JointController:
         else:
             if self.printing:
                 rospy.logdebug(f'Publishing {joint_state.name}, {joint_state.position}')
-        #rospy.loginfo(f'joint_state_publisher: moving')
         self.joint_pub.publish(joint_state)
 
     def error_publisher(self, error):
-    '''
-    Publishes error message
-    '''
+        '''
+        Sends an error
+        '''
         error_msg = Float32()
         error_msg.data = error
         self.error_pub.publish(error_msg)
@@ -287,7 +291,7 @@ class JointController:
 
     def go_to_thetas(self, desired_thetas, gain=None, offset=None):
         '''
-        Sets joints to desired angles
+        Sets joints at desired angles
         '''
         rospy.loginfo(f'go_to_angles({desired_thetas})')
         if gain is None:
@@ -330,9 +334,9 @@ class JointController:
         return True
 
 def main():
-'''
-Main debugging function
-'''
+    '''
+    Main debugging function
+    '''
     # Create ROS node
     jc = JointController()
     # Prevent python from exiting
@@ -341,6 +345,9 @@ Main debugging function
     rospy.spin()
 
 def test(jc):
+    '''
+    Main test function
+    '''
     while not rospy.is_shutdown():
         height = CARRY_HEIGHT
         width = 0.2
