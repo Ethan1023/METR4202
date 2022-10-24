@@ -49,6 +49,9 @@ Beware that there is a trade-off here, as reducing the aperature too much may
 result in inconsistent colour detection. This is best tuned experimentally by
 trial and error in the environment where it will be used.
 
+### Dynamixel Setup
+Follow the procedure [here](https://github.com/UQ-METR4202/dynamixel_interface/blob/master/tutorials/tutorial_1_using_the_controller.md), using the config in configs/ in this repository
+
 ### Make and launch
 
 Make the project by changing into the catkin_ws directory (or moving
