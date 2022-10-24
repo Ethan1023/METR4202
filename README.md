@@ -19,7 +19,7 @@ $ source /opt/ros/noetic/setup.bash
 
 ### Camera setup
 
-Running the Ximea camera requires a reasonably length setup and calibration,
+Running the Ximea camera requires a reasonably lengthy setup and calibration,
 as documented in [UQ-METR4202/metr4202_ximea_ros](https://github.com/UQ-METR4202/metr4202_ximea_ros).
 
 Assuming this has been done, and the correct camera IDs are used specified in
@@ -91,3 +91,7 @@ spacebar. The robot is now ready to sort ~~and throw~~ your luggage!
 * box_transform
 * colour_detection
 * gripper
+
+## Other
+Dynamixel config for https://github.com/UQ-METR4202/dynamixel_interface can be found in configs/
+Ximea camera calibration can be found in configs/
