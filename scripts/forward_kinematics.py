@@ -1,11 +1,10 @@
-import numpy as np
-from modern_robotics import RpToTrans, VecTose3, MatrixExp6, TransToRp, Adjoint
-from constants import L1, L2, L3, L4
-from inverse_kinematics import atan2
-
 '''
 This script contains all the maths for the forward kinematics used in the inverse kinematics code.
 '''
+
+import numpy as np
+from modern_robotics import RpToTrans, VecTose3, MatrixExp6, TransToRp, Adjoint
+from constants import L1, L2, L3, L4
 
 def main():
     pi = np.pi
@@ -33,7 +32,7 @@ def derivePoE(ind=4):
 
     Tsb = RpToTrans(R, p)
     #AdTsb = Adjoint(Tsb)
-    
+
     ws_list = np.array([[0, 0, 1], [0, 1, 0], [0, 1, 0], [0, 1, 0]])
     qs_list = np.array([[0, 0, 0], [0, 0, L1], [0, 0, L1+L2], [0, 0, L1+L2+L3]])
 
@@ -59,7 +58,7 @@ def derive_inv_jac(thetas, printing=True):
     theta1 = thetas[0]
     theta2 = thetas[1]
     theta3 = thetas[2] + theta2  # The lack of this theta2 cost me so much time and caused great pain
-    
+
     # Calculate joint positions
     pos_list = [np.array([0, 0])]
     pos_list.append(np.array([0, L1]))
@@ -89,7 +88,7 @@ def derive_inv_jac(thetas, printing=True):
     if not np.isclose(np.sum(np.abs(J1[4])), 0):
         print(f'WARNING - Impossibly able to move in y in L1 frame')
     # Remove rotation about x (roll) and movement in y (yaw-ish)
-    J14DOF = np.concatenate([J1[1:4], [J1[5]]])  
+    J14DOF = np.concatenate([J1[1:4], [J1[5]]])
     if printing:
         print(f'J14DOF=\n{J14DOF}')
     # Invert so joint velocities can be found

@@ -1,9 +1,11 @@
-import numpy as np
-from constants import H_BLOCK, H_BASE, RAD_BELT, H_FENCE, W_FENCE, L_FENCE, L_BASE, W_BASE, BASE_TO_BELT, BASE_TO_FENCE, THETA_BELT, THETA_FENCE, RADIUS_FENCE, GRABBY_HEIGHT
 '''
 This script contains the functions that are used in collision_detect_ros.py to assist the robot's
 collision handling.
 '''
+
+import numpy as np
+
+from constants import *
 
 
 def modify_path(current_pos, desired_pos, printing=True):
@@ -92,7 +94,7 @@ def avoids_belt(pos):
     #use eqn of a circle to determine if the xy coordinates of the end effector are in the area of the belt
     xy_belt = (x_gripper < (np.hypot(belt_rad, y_gripper) + BASE_TO_BELT)) and\
               (x_gripper > (-(np.hypot(belt_rad, y_gripper)) + BASE_TO_BELT))
-    
+
     if xy_belt and z_gripper < 0: #GRABBY_HEIGHT*0.9: #(z_gripper - H_BLOCK/2) < (H_BLOCK/4):
         return False
     else:
@@ -118,14 +120,14 @@ class CollisionHandler:
 
     def avoids_fence(self):
         '''
-        Checks if the end effector position will result in a collision with the fence.        
+        Checks if the end effector position will result in a collision with the fence.
         Returns: True if no collision, False if collision
         '''
         fence_x1 = 0.8*(BASE_TO_FENCE - H_BLOCK) #absoluate value of min collision x dim with 10% tolerance
         fence_x2 = 1.1*(W_FENCE + BASE_TO_FENCE) #absoluate value of max collision x dim with 10% tolerance
         fence_y = 1.2*(L_FENCE/2) #absoluate value of collision y dim with 20% tolerance
         fence_z = 1.2*H_FENCE #collision z dim with 10% tolerance
-    
+
         xy_fence = (self.x_gripper < fence_x2) and (self.x_gripper > fence_x1) and\
              (abs(self.y_gripper) < fence_y)
 
@@ -137,14 +139,14 @@ class CollisionHandler:
 
     def avoids_base(self):
         '''
-        Checks if the end effector position will result in a collision with the base.        
+        Checks if the end effector position will result in a collision with the base.
         Returns: True if no collision, False if collision
         '''
 
         base_x = 1.1*(L_BASE/2) #absoluate value of collision x dim with 10% tolerance
         base_y = 1.1*(W_BASE/2) #absoluate value of collision y dim with 10% tolerance
         base_z = 0.01 #collision z dim with 1cm tolerance
-    
+
         xy_base = (abs(self.x_gripper) < base_x) and (abs(self.y_gripper) < base_y)
 
         if xy_base and self.z_block < base_z:
@@ -155,7 +157,7 @@ class CollisionHandler:
 
     def avoids_blocks(self):
         '''
-        Checks if the end effector position will result in a collision with placed blocks.        
+        Checks if the end effector position will result in a collision with placed blocks.
         Returns: True if no collision, False if collision
         '''
         #TODO: write function
@@ -168,7 +170,7 @@ class CollisionHandler:
         #Gripper height
         if self.z_gripper < -(H_BASE - H_BLOCK/2):
         #gripper must never be lower than the height of a block on the ground
-            return False        
+            return False
 
         #Gripper angle
         elif abs(self.gripper_angle + np.pi/2) > 10*np.pi/180: #TODO: condition for if the gripper can't reach the block
@@ -182,7 +184,7 @@ class CollisionHandler:
         Checks that the end effector position will not result in a collision
         (with the belt, fence, base or placed blocks).
 
-        Self collision avoidance is already handled with elbow up and vertical 
+        Self collision avoidance is already handled with elbow up and vertical
         gripper constraints.
         Returns: True if no collision, False if collision
         '''

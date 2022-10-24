@@ -48,7 +48,7 @@ CONTROLLER_OFFSET = (1, 0, 0, 0)    # Add this to requested velocity
 # POSITIONS
 # Heights for grabbing a box, when not carrying a box, and when carrying a box respectivly
 COLOUR_DETECT_HEIGHT = 0.25
-GRABBY_HEIGHT = 0.02 
+GRABBY_HEIGHT = 0.02
 EMPTY_HEIGHT = 0.05
 CARRY_HEIGHT = 0.08
 DROPOFF_HEIGHT = -0.01
@@ -128,8 +128,6 @@ rpm2rad = lambda w: w * np.pi / 30
 # VELOCITY AND TASK 3 CONSTANTS
 VELOCITY_AVG_TIME = 1.0  # uses timestamps this many seconds apart to calculate velocity
 VELOCITY_DET_TIME = 0.5  # uses timestamps this many seconds apart to detect velocity
-#VELOCITY_AVG_TIME = 2.5  # uses timestamps this many seconds apart to calculate velocity
-#VELOCITY_THRESHOLD = 0.01   # How fast counts as moving
 OMEGA_THRESHOLD = rpm2rad(0.5) # [rad/s], how fast counts as moving - tradeoff between how slow counts as moving and sensor noise
 TASK3B_THRESHOLD = 1.5 # If the belt stops for less than this time, we are in task 3b
 ZROT_LIMIT = 30*np.pi/180 #if block is rotatted more than 30 degrees don't try and grab it

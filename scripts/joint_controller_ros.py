@@ -15,11 +15,11 @@ from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from metr4202.msg import Pos, Thetas  # Custom messages from msg/
 
-from collision_detect import modify_path, CollisionHandler
+from collision_detect import CollisionHandler
 from forward_kinematics import derivePoE, PoE
 from inverse_kinematics import inv_kin
 
-from constants import THETA_RANGES, ERROR_TOL, MAX_JOINT_VEL, CONTROLLER_GAIN, CONTROLLER_OFFSET, THETA_OFFSET, GRABBY_HEIGHT, EMPTY_HEIGHT, CARRY_HEIGHT
+from constants import *
 
 class JointController:
     '''
@@ -30,7 +30,7 @@ class JointController:
         self.other_init()
         self.rospy_init()
         rospy.loginfo(f'JointController initialised')
-   
+
     def rospy_init(self):
         '''
         Subscribes and publishes to various nodes
@@ -51,7 +51,7 @@ class JointController:
         while len(self.joint_names) == 0 and not rospy.is_shutdown():
             # Block operation until state vector obtained
             time.sleep(0.01)
-    
+
     def other_init(self):
         '''
         Sets variables
@@ -67,12 +67,12 @@ class JointController:
         self.joint_efforts = ()
         # Joint names
         self.names = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
-        
+
         self.max_vel = np.array(MAX_JOINT_VEL)
         self.thetas = None
 
         self.printing = True
-        
+
         self.desired_coords = None
         self.desired_pitch = None
 
@@ -139,7 +139,7 @@ class JointController:
         if thetas[2] < 0:  # Becomes negative if flipped
             for i in range(1, len(thetas)):
                 thetas[i] = thetas[i] + 2*THETA_OFFSET[i]
-            
+
         self.thetas = thetas
         self.theta_stale = False
         # TODO - check for collision - set error state
@@ -192,7 +192,7 @@ class JointController:
         '''
         Get current end effector position and pitch
         '''
-        if thetas is None: 
+        if thetas is None:
             if self.thetas is None: # If joint state has not been published yet, return none
                 return None, None
             thetas = self.thetas
@@ -304,7 +304,7 @@ class JointController:
         self.theta_stale = True
         error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
         rospy.logdebug(f'init error = {error}')
-        
+
         do = True
         while do or (error > ERROR_TOL and not rospy.is_shutdown() and self.ang_stale):
             do = False

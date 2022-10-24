@@ -6,13 +6,13 @@ This script contains all the maths and calcualtions for inverse kinematics of th
 '''
 
 def main():
-'''
-Main debugging function
-'''
+    '''
+    Main debugging function
+    '''
     coords = np.array([-2, 0, 2])
     pitch = 0*np.pi/180
     print(inv_kin(coords, pitch, True))
-    
+
     coords_2 = np.array([[3, -2], [0, 0], [1, 2]])
     pitch_2 = np.array([0, 0])
     print(inv_kin(coords_2, pitch_2))
@@ -31,7 +31,7 @@ def inv_kin(coords, pitch, printing=False, self_check=True, check_possible=False
     self_check - bool - whether to check against analytical equations
     check_possible - bool - return true/false if it is possible to reach coords instead of running
     return_both - bool - return both possible configurations
-    
+
     RETURNS
     2/3D array depending on input
     soln[solutions][thetas] or soln[solutions][thetas][case]
