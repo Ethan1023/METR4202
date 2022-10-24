@@ -93,5 +93,5 @@ spacebar. The robot is now ready to sort ~~and throw~~ your luggage!
 * gripper
 
 ## Other
-Dynamixel config for https://github.com/UQ-METR4202/dynamixel_interface can be found in configs/
-Ximea camera calibration can be found in configs/
+* Dynamixel config for https://github.com/UQ-METR4202/dynamixel_interface can be found in configs/
+* Ximea camera calibration can be found in configs/
