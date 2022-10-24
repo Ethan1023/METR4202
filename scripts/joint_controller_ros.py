@@ -2,6 +2,7 @@
 
 '''
 Use this - https://github.com/UQ-METR4202/dynamixel_interface/blob/master/tutorials/tutorial_1_using_the_controller.md
+This script holds all the functions for setting the joint angles of the robot
 '''
 
 import time
@@ -15,7 +16,7 @@ from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from metr4202.msg import Pos, Thetas  # Custom messages from msg/
 
-from collision_detect import CollisionHandler
+from collision_detect import CollisionHandler, modify_path
 from forward_kinematics import derivePoE, PoE
 from inverse_kinematics import inv_kin
 
@@ -24,7 +25,10 @@ from constants import *
 class JointController:
     '''
     Publish to desired_joint_state
-    Subscribe to joint_states
+    Publish current error (to state machine)
+    Subscribe to joint_states (from dynamixel)
+    Subscribe to desired pos and desired thetas (from state machine)
+    Subscribe to desires pose (from tutorial test script)
     '''
     def __init__(self):
         self.other_init()
@@ -43,9 +47,10 @@ class JointController:
         self.error_pub = rospy.Publisher('position_error', Float32, queue_size=1)
         # Subscribe to actual joint states
         rospy.Subscriber('joint_states', JointState, self.joint_state_callback)
-        # Subscribe to requested position
+        # Subscribe to requested end effector position
         rospy.Subscriber('desired_pos', Pos, self.end_pos_callback)
         rospy.Subscriber('desired_pose', Pose, self.end_pose_callback)
+        # Subscribe to requested joint angles
         rospy.Subscriber('desired_thetas', Thetas, self.desired_theta_callback)
 
         while len(self.joint_names) == 0 and not rospy.is_shutdown():
@@ -56,6 +61,7 @@ class JointController:
         '''
         Sets variables
         '''
+        # Keep track of when new values are received
         self.theta_stale = True
         self.pos_stale = True
         self.ang_stale = True
@@ -68,16 +74,19 @@ class JointController:
         # Joint names
         self.names = ('joint_1', 'joint_2', 'joint_3', 'joint_4')
 
+        # Maximum velocity
         self.max_vel = np.array(MAX_JOINT_VEL)
+        # Current joint angles
         self.thetas = None
-
+        # Modify frequency printing
         self.printing = True
-
+        # Desired end effector position 
         self.desired_coords = None
         self.desired_pitch = None
-
+        # Forwards kinematics for collision handler
         self.Tsb, self.screws = derivePoE()
         self.ch = CollisionHandler((0, 0, 0), 0)
+        # Error state
         self.ERROR = False
 
     def run(self):
@@ -85,6 +94,7 @@ class JointController:
         Runs the gripper
         '''
         while not rospy.is_shutdown():
+            # Wait for new command
             while self.pos_stale and self.ang_stale and not rospy.is_shutdown():
                 time.sleep(0.001)
             if rospy.is_shutdown():
@@ -98,6 +108,7 @@ class JointController:
 
     def end_pos_callback(self, pos):
         '''
+        Receives position commands,
         Sets desired coordinates and pitch to new coordinates
         '''
         self.desired_coords = np.array([pos.x, pos.y, pos.z])
@@ -106,6 +117,7 @@ class JointController:
 
     def desired_theta_callback(self, ang):
         '''
+        Receives joint angle commands
         Sets the desired theta values
         '''
         self.desired_thetas = np.array(ang.thetas)
@@ -113,6 +125,7 @@ class JointController:
 
     def end_pose_callback(self, pose):
         '''
+        Receives position commands
         Sets the desired end effector coordinates
         '''
         self.desired_coords = np.array([pose.position.x, pose.position.y, pose.position.z])
@@ -123,7 +136,8 @@ class JointController:
         '''
         Keep actual joint state up to date
         '''
-        self.joint_names = joint_state.name  # TODO - make this only be set once, or hard code?
+        # Read values from message
+        self.joint_names = joint_state.name
         self.joint_positions = joint_state.position
         self.joint_velocities = joint_state.velocity
         self.joint_efforts = joint_state.effort
@@ -134,25 +148,24 @@ class JointController:
                 if name == new_name:
                     thetas.append(theta)
         self.raw_thetas = np.array(thetas)
+        # Apply joint angle offsets
         for i in range(len(thetas)):
             thetas[i] = thetas[i] - THETA_OFFSET[i]
         if thetas[2] < 0:  # Becomes negative if flipped
             for i in range(1, len(thetas)):
                 thetas[i] = thetas[i] + 2*THETA_OFFSET[i]
-
+        # Save resulting joint angles            
         self.thetas = thetas
         self.theta_stale = False
-        # TODO - check for collision - set error state
 
     def joint_state_publisher(self, desired_pos, desired_vel=None, flip=False, dooffset=True):
         '''
         Publish desired joint angles and velocities
         '''
-        # TODO - if error state, go to safe pos
-        # TODO - once in safe pos, remove error state
         joint_state = JointState()
         joint_state.name = self.names
         joint_state.position = desired_pos
+        # apply joint angle offsets
         if dooffset:
             joint_state.position = desired_pos + np.array(THETA_OFFSET)
             if flip:
@@ -182,7 +195,7 @@ class JointController:
 
     def error_publisher(self, error):
         '''
-        Sends an error
+        Report joint angle error to state machine
         '''
         error_msg = Float32()
         error_msg.data = error
@@ -204,13 +217,16 @@ class JointController:
 
     def go_to_pos(self, desired_coords, desired_pitch, gain=None, offset=None):
         '''
-        Sets arm to desired position
+        Given desired_coords and desired_pitch, move end effector to these coordinates,
+        Report joint angle error so state machine knows when we have arrived
         '''
         rospy.loginfo(f'got_pos({desired_coords}, {desired_pitch})')
+        # Read default gain and offset
         if gain is None:
             gain = np.array(CONTROLLER_GAIN)
         if offset is None:
             offset = np.array(CONTROLLER_OFFSET)
+        # Check destination is possible
         possible = inv_kin(desired_coords, desired_pitch, check_possible=True) # Check if possible
         if not possible:
             rospy.logerr(f'ERROR - NOT POSSIBLE')
@@ -220,6 +236,7 @@ class JointController:
         # Check if theta1 out of range
         flip = False
         if desired_thetas[0] < THETA_RANGES[0][0] or desired_thetas[0] > THETA_RANGES[0][1]:
+            # if out of range, do the flip (add/subtract 180 to base and negate all others)
             desired_thetas[0] -= np.pi * desired_thetas[0]/np.abs(desired_thetas[0])
             desired_thetas[1:] *= -1
             flip = True
@@ -230,9 +247,7 @@ class JointController:
         rospy.logdebug(f'Desired pos = {desired_coords}, {desired_pitch}')
         error = np.sqrt(np.sum((desired_thetas-thetas)**2))  # Calculate error
         rospy.logdebug(f'init error = {error}')
-        # TODO - check route is safe and modify as necessary
-        # e.g. if height below wheel thing, but end destination in safe area, don't go low until clear of wheel
-        #       if current pos above wheel - modify end pos to be safe height
+        # Error from waypoint
         error_temp = ERROR_TOL
         do = True
         while do or (error > ERROR_TOL and not rospy.is_shutdown() and self.pos_stale):
@@ -242,7 +257,7 @@ class JointController:
             current_pos = self.get_current_pos()
             # Get 'waypoint'
             #temp_desired_pos = modify_path(current_pos, (desired_coords, desired_pitch))
-            # No waypoint
+            # No waypoint required to tasks at the moment
             temp_desired_pos = (desired_coords, desired_pitch)
             # Check waypoint is possible
             possible = inv_kin(temp_desired_pos[0], temp_desired_pos[1], check_possible=True)
@@ -263,7 +278,6 @@ class JointController:
             rospy.logdebug(f'Current thetas = {thetas}')
             rospy.logdebug(f'Desired thetas = {desired_thetas}')
             rospy.logdebug(f'Waypoint thetas = {temp_desired_thetas}')
-            #thetas_diff = abs(desired_thetas - thetas)  # State error
             thetas_diff = abs(temp_desired_thetas - thetas)  # State error
             rospy.logdebug(f'Theta error = {thetas_diff}')
             target_thetas_vel = thetas_diff * gain # P controller
@@ -271,7 +285,6 @@ class JointController:
             target_thetas_vel = target_thetas_vel/target_thetas_mag**0.5 + offset  # Offset by a min velocity
             rospy.logdebug(f'Target joint vel = {target_thetas_vel}')
             # Update velocity
-            #self.joint_state_publisher(desired_thetas, target_thetas_vel)
             self.joint_state_publisher(temp_desired_thetas, target_thetas_vel, flip=flip)
             # Wait for new values
             while self.theta_stale and not rospy.is_shutdown():
@@ -291,9 +304,12 @@ class JointController:
 
     def go_to_thetas(self, desired_thetas, gain=None, offset=None):
         '''
-        Sets joints at desired angles
+        Given desired_thetas, move end effector to these coordinates,
+        Report joint angle error so state machine knows when we have arrived
+        gain and offset are proportional and constant components of a velocity controller
         '''
         rospy.loginfo(f'go_to_angles({desired_thetas})')
+        # Read default gain and offset
         if gain is None:
             gain = np.array(CONTROLLER_GAIN)
         if offset is None:
@@ -306,6 +322,7 @@ class JointController:
         rospy.logdebug(f'init error = {error}')
 
         do = True
+        # Loop until arrived or new position received
         while do or (error > ERROR_TOL and not rospy.is_shutdown() and self.ang_stale):
             do = False
             rospy.logdebug(f'Current thetas = {thetas}')
@@ -339,14 +356,14 @@ def main():
     '''
     # Create ROS node
     jc = JointController()
-    # Prevent python from exiting
-    #test(jc)
+    # Run controller
     jc.run()
+    # Prevent python from exiting
     rospy.spin()
 
 def test(jc):
     '''
-    Main test function
+    Test function
     '''
     while not rospy.is_shutdown():
         height = CARRY_HEIGHT

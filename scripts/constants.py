@@ -88,11 +88,10 @@ STATE_GRAB = 2
 STATE_COLOUR = 3
 STATE_PLACE = 4
 STATE_ERROR = 5
-STATE_TRAP = 6
-STATE_TOSS = 7
-STATE_GRAB_MOVING = 8
-STATE_FIND_TOSS = 9
-STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'trap', 'toss', 'grab_moving', 'find_toss']
+STATE_TOSS = 6
+STATE_GRAB_MOVING = 7
+STATE_FIND_TOSS = 8
+STATE_NAMES = ['reset', 'find', 'grab', 'colour', 'place', 'error', 'toss', 'grab_moving', 'find_toss']
 
 # ROBOT POSITIONS
 POSITION_IDLE = (L4, 0, L1 + L2 + L3)

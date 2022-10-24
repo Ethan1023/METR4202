@@ -27,6 +27,9 @@ from constants import *
 
 
 class Box:
+    '''
+    All of the functions associated with the block handling
+    '''
     def __init__(self) -> None:
         self.x = None
         self.y = None
@@ -81,13 +84,12 @@ class Box:
             del self.y_hist[0]
             del self.t_hist[0]
 
-        # Calculate velocity
-        #v_x = (self.x_hist[-1] - self.x_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
-        #v_y = (self.y_hist[-1] - self.y_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
-
         self.angular_velocity = self.angvel()
 
     def angvel(self, oldind=0):
+        '''
+        Calculates angular velocity
+        '''
         if len(self.x_hist) < 2:
             return 0
         th_curr = np.arctan2(self.x-BASE_TO_BELT, self.y)
@@ -98,9 +100,8 @@ class Box:
         if mindex:
             rospy.logwarn(f'vel = {th_diff[mindex]/dt} NOT {th_diff[0]/dt}')
         vel = th_diff[mindex] / dt
-        # th_curr = -179, th_old = 179
 
-
+            
         return vel
     def future_pos(self, delta_t):
         '''
@@ -116,6 +117,10 @@ class Box:
 
 
 class StateMachine:
+    '''
+    This class contains all the logic for choosing which block to pick up,
+    subscribing to other nodes and determining which task is is being run
+    '''
     def __init__(self, dorospy: bool = True) -> None:
         self.other_init()
         rospy.loginfo('StateMachine other init completed')
@@ -127,18 +132,16 @@ class StateMachine:
         rospy.loginfo(f'StateMachine initialised')
 
     def other_init(self):
+        '''
+        Sets variables
+        '''
         self.box_lock = Lock()
-        #self.theta_stale = True
-        #self.printing = True
         self.camera_stale = True  # Track is new camera info has been received
         self.position_error = ERROR_TOL*10  # Initialise position error
 
         self.boxes = {}  # Dictionary of boxes currently on belt
 
-        #self.x_vels = []  # List of velocities
-        #self.y_vels = []
 
-        #self.omegas = []  # list of angular velocities
         self.omega = 0    # average angular velocity (0 if not known)
         self.last_stopped_time = time.time()   # update while any blocks are not moving
         self.last_moved_time = time.time()    # update while any blocks are moving
@@ -153,13 +156,15 @@ class StateMachine:
         # State functions
         self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
                             self.state_colour, self.state_place, self.state_error,\
-                            self.state_trap, self.state_toss, self.state_grab_moving,\
-                            self.state_find_toss)
+                            self.state_toss, self.state_grab_moving, self.state_find_toss)
         self.desired_id = None    # id of desired box
         self.moving = True        # Track if belt is moving
         self.grab_moving = False  # Track if we want to grab moving
 
     def rospy_init(self):
+        '''
+        Subscribing to nodes
+        '''
         # Create node
         rospy.init_node('state_machine', anonymous=False)
         # Publish to desired end effector
@@ -233,7 +238,7 @@ class StateMachine:
         self.box_lock.release()
 
         # Update instance variables tracking belt start and stop times
-        #self.last_stopping_duration
+
         if self.omega:
             if self.omega > OMEGA_THRESHOLD:
                     if not self.moving:
@@ -290,7 +295,9 @@ class StateMachine:
         return colour
 
     def position_error_callback(self, msg):
-        # Save error from desired thetas
+        '''
+        Save error from desired thetas
+        '''
         self.position_error = msg.data
 
     def desired_pos_publisher(self, coords, pitch=None, rad_offset=0, dry=False):
@@ -341,6 +348,9 @@ class StateMachine:
         self.gripper_pub.publish(msg)
 
     def delete_box(self, box_id):
+        '''
+        Deletes box ID from queue
+        '''
         self.box_lock.acquire()
         if box_id in self.boxes:
             del self.boxes[box_id]
@@ -370,12 +380,7 @@ class StateMachine:
                 time.sleep(0.001)
             if rospy.is_shutdown():
                 return 0
-            #self.camera_stale = True
-            #rospy.loginfo('run: looping')
-            #time.sleep(5)
-            #for box in self.boxes.values():
-            #    box.future_pos(PREDICT_TIME)
-            #time.sleep(1)
+
             self.loop()
 
     def set_grab_moving(self):
@@ -409,7 +414,7 @@ class StateMachine:
         to the end effector in rads.
         '''
         ang = np.arctan(y / x)
-        #rospy.loginfo(f'^%& {np.rad2deg(ang) = } deg')
+
         return abs(ang - zrot)
 
     def heuristic_relative_rotation(self, angle: float) -> float:
@@ -417,7 +422,7 @@ class StateMachine:
         Returns a float between 0 and 1 corresponding to the heuristic
         score of the given relative rotation angle.
         '''
-        #rospy.loginfo(f'heuristic angle: {np.rad2deg(angle)} deg')
+
         angle = angle % (np.pi/2) # set angle between 0 and 90 deg
         return float('-inf') if np.deg2rad(25) < angle < np.deg2rad(65) else 1
 
@@ -480,9 +485,6 @@ class StateMachine:
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         if future:
-            #if time.time() - predict_time > PREDICT_TIME - GRAB_EARLY_TIME:
-            #    rospy.loginfo('pickup_block: failed to reach block on time')
-            #    return STATE_RESET
             # sleep remaining time
             time.sleep(PREDICT_TIME - (time.time() - predict_time) - GRAB_EARLY_TIME)
             rospy.loginfo(f'pickup_block: start INTERCEPT after {time.time() - predict_time}s')
@@ -552,6 +554,9 @@ class StateMachine:
         return STATE_FIND
 
     def state_find_toss(self):
+        '''
+        Determines whether the bonus task is being implemented
+        '''
         while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(1)
             return STATE_FIND
@@ -712,9 +717,7 @@ class StateMachine:
 
         # To avoid collision, from the colour detection pose first rotate the
         # base to the x, y coordinate of the desired drop-off zone
-        #p = np.array(coords)
-        #x, y = np.linalg.norm([0.1, 0.1]) / np.linalg.norm(p) * p
-        #coords = (x, y, CARRY_HEIGHT)
+
         coords = (coords[0], coords[1], CARRY_HEIGHT)
         # coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT)
         self.move_to(coords, pitch=-np.pi/2, error_tol=ERROR_TOL_COARSE)
@@ -728,9 +731,7 @@ class StateMachine:
         self.command_gripper(open_gripper=True)
         time.sleep(GRAB_TIME)
 
-        # # Move the arm back up slightly before returning to reset position
-        # coords = (coords[0], coords[1], CARRY_HEIGHT)
-        # self.move_to(coords, pitch=-np.pi/2)
+
 
         # Delete the box from tracked boxes
         self.delete_box(self.desired_id)
@@ -739,6 +740,10 @@ class StateMachine:
         return STATE_RESET
 
     def state_toss(self):
+        '''
+        Move the end effector from the colour detection pose to the box toss position
+        corresponding to the desired colour.
+        '''
         base_angle = YEET_ANGLE[self.detected_colour] + np.pi
         if base_angle > np.pi:
             base_angle -= 2*np.pi
@@ -811,12 +816,11 @@ class StateMachine:
         return STATE_RESET
 
     def state_error(self):
-        # If called, open gripper and go to state_reset
+        '''
+        If called, open gripper and go to state_reset
+        '''
         self.command_gripper(open_gripper=True)
         return STATE_RESET
-
-    def state_trap(self):
-        return STATE_TRAP
 
 
 if __name__ == '__main__':
