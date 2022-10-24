@@ -13,7 +13,7 @@ def modify_path(current_pos, desired_pos, printing=True):
     Accepts current and desired positions (as an array)
     Returns modified desired position to avoid collisions (as an array)
     '''
-    # TODO - modify combos that are likely to result in a collision
+    
     des_coords, des_pitch = desired_pos
     des_radius = np.sqrt(des_coords[0]**2 + des_coords[1]**2)
     des_theta1 = np.arctan2(des_coords[1], des_coords[0])
@@ -154,15 +154,6 @@ class CollisionHandler:
         else:
             return True
 
-
-    def avoids_blocks(self):
-        '''
-        Checks if the end effector position will result in a collision with placed blocks.
-        Returns: True if no collision, False if collision
-        '''
-        #TODO: write function
-        return True
-
     def valid_gripper_pos(self):
         '''
         Checks that the gripper's height and angle are valid
@@ -173,7 +164,7 @@ class CollisionHandler:
             return False
 
         #Gripper angle
-        elif abs(self.gripper_angle + np.pi/2) > 10*np.pi/180: #TODO: condition for if the gripper can't reach the block
+        elif abs(self.gripper_angle + np.pi/2) > 10*np.pi/180:
             return False
         else:
             return True
