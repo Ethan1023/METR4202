@@ -188,7 +188,6 @@ class CollisionHandler:
         gripper constraints.
         Returns: True if no collision, False if collision
         '''
-        no_collisions = avoids_belt(self.p) and self.avoids_fence() and self.avoids_base() and\
-                        self.avoids_blocks() and self.valid_gripper_pos()
+        no_collisions = avoids_belt(self.p) and self.avoids_fence() and self.avoids_base() and self.valid_gripper_pos()
 
         return no_collisions
