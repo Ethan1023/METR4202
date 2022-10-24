@@ -27,6 +27,9 @@ from constants import *
 
 
 class Box:
+    '''
+    All of the functions associated with the block handling
+    '''
     def __init__(self) -> None:
         self.x = None
         self.y = None
@@ -88,6 +91,9 @@ class Box:
         self.angular_velocity = self.angvel()
 
     def angvel(self, oldind=0):
+        '''
+        Calculates angular velocity
+        '''
         if len(self.x_hist) < 2:
             return 0
         th_curr = np.arctan2(self.x-BASE_TO_BELT, self.y)
@@ -98,9 +104,8 @@ class Box:
         if mindex:
             rospy.logwarn(f'vel = {th_diff[mindex]/dt} NOT {th_diff[0]/dt}')
         vel = th_diff[mindex] / dt
-        # th_curr = -179, th_old = 179
 
-
+            
         return vel
     def future_pos(self, delta_t):
         '''
@@ -116,6 +121,10 @@ class Box:
 
 
 class StateMachine:
+    '''
+    This class contains all the logic for choosing which block to pick up,
+    subscribing to other nodes and determining which task is is being run
+    '''
     def __init__(self, dorospy: bool = True) -> None:
         self.other_init()
         rospy.loginfo('StateMachine other init completed')
@@ -127,6 +136,9 @@ class StateMachine:
         rospy.loginfo(f'StateMachine initialised')
 
     def other_init(self):
+        '''
+        Sets variables
+        '''
         self.box_lock = Lock()
         #self.theta_stale = True
         #self.printing = True
@@ -153,13 +165,15 @@ class StateMachine:
         # State functions
         self.state_funcs = (self.state_reset, self.state_find, self.state_grab, \
                             self.state_colour, self.state_place, self.state_error,\
-                            self.state_trap, self.state_toss, self.state_grab_moving,\
-                            self.state_find_toss)
+                            self.state_toss, self.state_grab_moving, self.state_find_toss)
         self.desired_id = None    # id of desired box
         self.moving = True        # Track if belt is moving
         self.grab_moving = False  # Track if we want to grab moving
 
     def rospy_init(self):
+        '''
+        Subscribing to nodes
+        '''
         # Create node
         rospy.init_node('state_machine', anonymous=False)
         # Publish to desired end effector
@@ -290,7 +304,9 @@ class StateMachine:
         return colour
 
     def position_error_callback(self, msg):
-        # Save error from desired thetas
+        '''
+        Save error from desired thetas
+        '''
         self.position_error = msg.data
 
     def desired_pos_publisher(self, coords, pitch=None, rad_offset=0, dry=False):
@@ -341,6 +357,9 @@ class StateMachine:
         self.gripper_pub.publish(msg)
 
     def delete_box(self, box_id):
+        '''
+        Deletes box ID from queue
+        '''
         self.box_lock.acquire()
         if box_id in self.boxes:
             del self.boxes[box_id]
@@ -552,6 +571,9 @@ class StateMachine:
         return STATE_FIND
 
     def state_find_toss(self):
+        '''
+        Determines whether the bonus task is being implemented
+        '''
         while len(self.boxes) == 0 and not rospy.is_shutdown():
             time.sleep(1)
             return STATE_FIND
@@ -739,6 +761,10 @@ class StateMachine:
         return STATE_RESET
 
     def state_toss(self):
+        '''
+        Move the end effector from the colour detection pose to the box toss position
+        corresponding to the desired colour.
+        '''
         base_angle = YEET_ANGLE[self.detected_colour] + np.pi
         if base_angle > np.pi:
             base_angle -= 2*np.pi
@@ -811,12 +837,11 @@ class StateMachine:
         return STATE_RESET
 
     def state_error(self):
-        # If called, open gripper and go to state_reset
+        '''
+        If called, open gripper and go to state_reset
+        '''
         self.command_gripper(open_gripper=True)
         return STATE_RESET
-
-    def state_trap(self):
-        return STATE_TRAP
 
 
 if __name__ == '__main__':
