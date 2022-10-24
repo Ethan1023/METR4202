@@ -2,6 +2,7 @@
 
 '''
 Use this - https://github.com/UQ-METR4202/dynamixel_interface/blob/master/tutorials/tutorial_1_using_the_controller.md
+This script holds all the functions for setting the joint angles of the robot
 '''
 
 import time

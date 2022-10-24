@@ -84,10 +84,6 @@ class Box:
             del self.y_hist[0]
             del self.t_hist[0]
 
-        # Calculate velocity
-        #v_x = (self.x_hist[-1] - self.x_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
-        #v_y = (self.y_hist[-1] - self.y_hist[0]) / (self.t_hist[-1] - self.t_hist[0])
-
         self.angular_velocity = self.angvel()
 
     def angvel(self, oldind=0):
@@ -140,17 +136,12 @@ class StateMachine:
         Sets variables
         '''
         self.box_lock = Lock()
-        #self.theta_stale = True
-        #self.printing = True
         self.camera_stale = True  # Track is new camera info has been received
         self.position_error = ERROR_TOL*10  # Initialise position error
 
         self.boxes = {}  # Dictionary of boxes currently on belt
 
-        #self.x_vels = []  # List of velocities
-        #self.y_vels = []
 
-        #self.omegas = []  # list of angular velocities
         self.omega = 0    # average angular velocity (0 if not known)
         self.last_stopped_time = time.time()   # update while any blocks are not moving
         self.last_moved_time = time.time()    # update while any blocks are moving
@@ -247,7 +238,7 @@ class StateMachine:
         self.box_lock.release()
 
         # Update instance variables tracking belt start and stop times
-        #self.last_stopping_duration
+
         if self.omega:
             if self.omega > OMEGA_THRESHOLD:
                     if not self.moving:
@@ -389,12 +380,7 @@ class StateMachine:
                 time.sleep(0.001)
             if rospy.is_shutdown():
                 return 0
-            #self.camera_stale = True
-            #rospy.loginfo('run: looping')
-            #time.sleep(5)
-            #for box in self.boxes.values():
-            #    box.future_pos(PREDICT_TIME)
-            #time.sleep(1)
+
             self.loop()
 
     def set_grab_moving(self):
@@ -428,7 +414,7 @@ class StateMachine:
         to the end effector in rads.
         '''
         ang = np.arctan(y / x)
-        #rospy.loginfo(f'^%& {np.rad2deg(ang) = } deg')
+
         return abs(ang - zrot)
 
     def heuristic_relative_rotation(self, angle: float) -> float:
@@ -436,7 +422,7 @@ class StateMachine:
         Returns a float between 0 and 1 corresponding to the heuristic
         score of the given relative rotation angle.
         '''
-        #rospy.loginfo(f'heuristic angle: {np.rad2deg(angle)} deg')
+
         angle = angle % (np.pi/2) # set angle between 0 and 90 deg
         return float('-inf') if np.deg2rad(25) < angle < np.deg2rad(65) else 1
 
@@ -499,9 +485,6 @@ class StateMachine:
         while self.position_error > ERROR_TOL and not rospy.is_shutdown():
             time.sleep(0.01)
         if future:
-            #if time.time() - predict_time > PREDICT_TIME - GRAB_EARLY_TIME:
-            #    rospy.loginfo('pickup_block: failed to reach block on time')
-            #    return STATE_RESET
             # sleep remaining time
             time.sleep(PREDICT_TIME - (time.time() - predict_time) - GRAB_EARLY_TIME)
             rospy.loginfo(f'pickup_block: start INTERCEPT after {time.time() - predict_time}s')
@@ -734,9 +717,7 @@ class StateMachine:
 
         # To avoid collision, from the colour detection pose first rotate the
         # base to the x, y coordinate of the desired drop-off zone
-        #p = np.array(coords)
-        #x, y = np.linalg.norm([0.1, 0.1]) / np.linalg.norm(p) * p
-        #coords = (x, y, CARRY_HEIGHT)
+
         coords = (coords[0], coords[1], CARRY_HEIGHT)
         # coords = (-0.1, 0.1, COLOUR_DETECT_HEIGHT)
         self.move_to(coords, pitch=-np.pi/2, error_tol=ERROR_TOL_COARSE)
@@ -750,9 +731,7 @@ class StateMachine:
         self.command_gripper(open_gripper=True)
         time.sleep(GRAB_TIME)
 
-        # # Move the arm back up slightly before returning to reset position
-        # coords = (coords[0], coords[1], CARRY_HEIGHT)
-        # self.move_to(coords, pitch=-np.pi/2)
+
 
         # Delete the box from tracked boxes
         self.delete_box(self.desired_id)
